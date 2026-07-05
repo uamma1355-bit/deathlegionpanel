@@ -121,7 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
         try {
           const apiKey = await createApiKey('browser-session');
           setStoredToken(apiKey);
-          // Store the identifier too (for deletion at logout)
+          // Store the identifier (first 16 chars, e.g. "ptlc_AhV8dFZtWXN") for deletion at logout
           if (typeof window !== 'undefined' && apiKey.startsWith('ptlc_')) {
             window.localStorage.setItem(API_KEY_IDENTIFIER_STORAGE_KEY, apiKey.substring(0, 16));
           }

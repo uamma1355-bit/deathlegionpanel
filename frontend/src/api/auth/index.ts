@@ -78,10 +78,14 @@ export async function performPasswordReset(payload: PerformPasswordResetRequest)
  * issues (third-party cookie blocking, SameSite=None restrictions, etc.).
  *
  * The response shape is:
- *   { object: "api_key", attributes: { identifier, ... }, meta: { secret_token: "ptlc_..." } }
+ *   {
+ *     object: "api_key",
+ *     attributes: { identifier: "ptlc_AhV8dFZtWXN", ... },
+ *     meta: { secret_token: "V5U0Kx7YB4ojvif23AD1Hdg45fYFlcZ0" }
+ *   }
  *
- * Returns the full API key (the secret_token from meta) — store in
- * localStorage + use as Authorization: Bearer for all future requests.
+ * The FULL API key (used in Authorization: Bearer) is identifier + secret_token,
+ * e.g. "ptlc_AhV8dFZtWXNV5U0Kx7YB4ojvif23AD1Hdg45fYFlcZ0".
  */
 export async function createApiKey(description: string): Promise<string> {
   const res = await http.post<unknown>('/api/client/account/api-keys', {
@@ -92,11 +96,13 @@ export async function createApiKey(description: string): Promise<string> {
     attributes?: { identifier?: string };
     meta?: { secret_token?: string };
   };
+  const identifier = data.attributes?.identifier;
   const secretToken = data.meta?.secret_token;
-  if (!secretToken) {
-    throw new Error('Failed to create API key — missing secret_token in meta');
+  if (!identifier || !secretToken) {
+    throw new Error('Failed to create API key — missing identifier or secret_token');
   }
-  return secretToken;
+  // The full API key is identifier + secret_token (concatenated, no separator)
+  return identifier + secretToken;
 }
 
 /** Delete a client API key by its identifier (used at logout). */
