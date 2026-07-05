@@ -1,0 +1,71 @@
+# Auto-deploy frontend to Vercel on push to main.
+# Uses the Vercel token you already have (<VERCEL_TOKEN>).
+#
+# Setup (one-time, in your GitHub repo):
+#   Settings → Secrets and variables → Actions → New repository secret
+#   - VERCEL_TOKEN  = <VERCEL_TOKEN>
+#   - VERCEL_ORG_ID  = team_uamma1355-2254  (or whatever your team ID is — see Vercel dashboard)
+#   - VERCEL_PROJECT_ID = prj_xxxxxxxxxxxxx  (from project settings → General → Project ID)
+#
+# Reference: docs/09-DeploymentGuide.md
+name: Deploy Frontend to Vercel
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'frontend/**'
+      - 'shared/**'
+      - 'vercel.json'
+      - '.github/workflows/deploy-frontend.yml'
+  workflow_dispatch:  # manual trigger from Actions tab
+
+jobs:
+  deploy:
+    name: Deploy to Vercel (production)
+    runs-on: ubuntu-latest
+    if: github.repository != 'pterodactyl/panel'  # don't run on the upstream fork
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Pull Vercel environment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
+
+      - name: Build project artifacts
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: vercel build --prod --token "$VERCEL_TOKEN"
+
+      - name: Deploy to Vercel (production)
+        id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          DEPLOY_URL=$(vercel deploy --prebuilt --prod --yes --token "$VERCEL_TOKEN" | tail -1)
+          echo "url=$DEPLOY_URL" >> "$GITHUB_OUTPUT"
+          echo "✓ Deployed to: $DEPLOY_URL"
+
+      - name: Comment on commit
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const url = '${{ steps.deploy.outputs.url }}';
+            if (url) {
+              core.info(`Production URL: ${url}`);
+            }

@@ -1,0 +1,190 @@
+# Auto-deploy backend to a Linux box via SSH on push to main.
+#
+# Works with ANY Linux host that has SSH access — including:
+#   - Oracle Cloud Always-Free ARM VPS (recommended, truly free)
+#   - Google Cloud e2-micro (always-free, 1GB RAM tight)
+#   - AWS EC2 t2.micro (12 months free)
+#   - Your own physical server / Raspberry Pi
+#   - A friend's server
+#
+# Setup (one-time, in your GitHub repo):
+#   1. Generate an SSH key on your local machine:
+#        ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/ptero_deploy
+#   2. Copy the public key to your Linux server:
+#        ssh-copy-id -i ~/.ssh/ptero_deploy.pub ubuntu@your-server-ip
+#   3. Copy the PRIVATE key contents:
+#        cat ~/.ssh/ptero_deploy
+#   4. In your GitHub repo: Settings → Secrets and variables → Actions → New repository secret:
+#        SSH_HOST         = your-server-ip (e.g. 138.2.45.67)
+#        SSH_USER         = ubuntu (or root, or whatever user you created)
+#        SSH_PRIVATE_KEY  = (paste the entire private key, including -----BEGIN/END-----)
+#        API_DOMAIN       = api.yourdomain.com (or your-server-ip if no domain)
+#        FRONTEND_DOMAIN  = deathlegionpanel.vercel.app
+#        ADMIN_EMAIL      = admin@yourdomain.com
+#        ADMIN_USERNAME   = admin
+#        ADMIN_PASSWORD   = ChangeMe123!
+#
+# What this workflow does:
+#   1. SSHes into your server
+#   2. Pulls the latest code (or rsyncs from the runner)
+#   3. Runs composer install --no-dev
+#   4. Runs php artisan migrate --force
+#   5. Caches config/routes/views
+#   6. Restarts PHP-FPM + queue worker
+#   7. Verifies the API is responding
+#
+# Reference: docs/09-DeploymentGuide.md, docs/14-FreeTierGuide.md
+name: Deploy Backend via SSH
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'backend/**'
+      - 'shared/**'
+      - '.github/workflows/deploy-backend-ssh.yml'
+  workflow_dispatch:  # manual trigger from Actions tab
+
+jobs:
+  deploy:
+    name: SSH deploy + migrate
+    runs-on: ubuntu-latest
+    if: github.repository != 'pterodactyl/panel'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Check server is reachable
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "echo 'SSH OK' && uname -a && php -v | head -1"
+
+      - name: Sync backend code
+        run: |
+          rsync -avz --delete \
+            --exclude='vendor/' \
+            --exclude='node_modules/' \
+            --exclude='storage/logs/*' \
+            --exclude='storage/framework/*' \
+            --exclude='.env' \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            backend/ \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/pterodactyl/
+
+      - name: Sync shared/ (for any TS tooling)
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            shared/ \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/pterodactyl/shared/
+
+      - name: Composer install + migrate + cache
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            set -e
+            cd /var/www/pterodactyl
+
+            # Composer install (skip if already done)
+            if [ ! -d vendor ]; then
+              composer install --no-dev --optimize-autoloader --no-interaction
+            else
+              composer install --no-dev --optimize-autoloader --no-interaction --no-scripts
+            fi
+
+            # Migrate
+            php artisan migrate --force
+
+            # Cache for production
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+            php artisan event:cache
+            php artisan optimize
+
+            # Fix permissions
+            chown -R www-data:www-data storage bootstrap/cache
+            chmod -R 775 storage bootstrap/cache
+          '
+
+      - name: Restart services
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            sudo systemctl restart php8.2-fpm 2>/dev/null || \
+            sudo systemctl restart php8.1-fpm 2>/dev/null || \
+            sudo systemctl restart php-fpm 2>/dev/null || true
+
+            sudo supervisorctl restart pterodactyl-worker:* 2>/dev/null || true
+          '
+
+      - name: Verify API is responding
+        run: |
+          sleep 3
+          API_DOMAIN="${{ secrets.API_DOMAIN }}"
+          if [ -z "$API_DOMAIN" ]; then
+            API_DOMAIN="${{ secrets.SSH_HOST }}"
+          fi
+
+          # Try HTTP first (will redirect to HTTPS)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://$API_DOMAIN/api/client/ping" || \
+                   curl -s -o /dev/null -w "%{http_code}" "http://$API_DOMAIN/api/client/ping" || \
+                   echo "000")
+
+          echo "API ping status: $STATUS"
+          if [ "$STATUS" = "200" ] || [ "$STATUS" = "204" ]; then
+            echo "✓ Backend is live at https://$API_DOMAIN"
+          else
+            echo "⚠ Backend ping returned $STATUS — check logs"
+            exit 1
+          fi
+
+      - name: Create admin account (idempotent — only if doesn't exist)
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            cd /var/www/pterodactyl
+
+            # Check if admin already exists by email
+            EXISTS=$(php artisan tinker --execute="
+              use Pterodactyl\Models\User;
+              \$u = User::where(\"email\", \"${{ secrets.ADMIN_EMAIL }}\")->first();
+              echo \$u ? \"yes\" : \"no\";
+            " 2>/dev/null | tr -d "\n\r")
+
+            if [ "$EXISTS" = "no" ] || [ -z "$EXISTS" ]; then
+              echo "Creating admin user ${{ secrets.ADMIN_EMAIL }}..."
+              php artisan p:user:make \
+                --email "${{ secrets.ADMIN_EMAIL }}" \
+                --username "${{ secrets.ADMIN_USERNAME }}" \
+                --name-first Admin \
+                --name-last User \
+                --password "${{ secrets.ADMIN_PASSWORD }}" \
+                --admin 1
+              echo "✓ Admin created"
+            else
+              echo "Admin ${{ secrets.ADMIN_EMAIL }} already exists — skipping"
+            fi
+          '
+
+      - name: Summary
+        run: |
+          echo "============================================================"
+          echo "  ✓ Backend deployed"
+          echo "============================================================"
+          echo ""
+          echo "  Server:       ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          echo "  API URL:      https://${{ secrets.API_DOMAIN || secrets.SSH_HOST }}"
+          echo "  Admin Blade:  https://${{ secrets.API_DOMAIN || secrets.SSH_HOST }}/admin"
+          echo ""
+          echo "  Admin login:  ${{ secrets.ADMIN_EMAIL }}"
+          echo "  Admin user:   ${{ secrets.ADMIN_USERNAME }}"
+          echo ""
+          echo "  Frontend:     https://deathlegionpanel.vercel.app"
+          echo ""
+          echo "  Next: update VITE_API_URL on Vercel to: https://${{ secrets.API_DOMAIN || secrets.SSH_HOST }}"
+          echo "    (or run scripts/update-frontend-env.sh)"
+          echo ""

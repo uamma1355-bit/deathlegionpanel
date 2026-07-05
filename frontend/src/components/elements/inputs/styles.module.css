@@ -1,0 +1,31 @@
+/* Verbatim port of pterodactyl-source/resources/scripts/components/elements/inputs/styles.module.css */
+/* Adapted: flat class names. */
+
+.textInput {
+    @apply transition-shadow duration-75;
+    @apply w-full bg-neutral-800 rounded px-4 py-2 outline-none border-0;
+    @apply text-neutral-100 placeholder-neutral-500;
+}
+
+.textInputFocus,
+.textInput:focus,
+.textInput:active {
+    @apply ring-4 ring-blue-300 ring-opacity-75;
+}
+
+.textInputLoose {
+    @apply px-6 py-3;
+}
+
+.textInputLight {
+    @apply bg-white text-neutral-800;
+}
+
+.checkboxInput {
+    @apply w-4 h-4 rounded-sm border-neutral-500 bg-neutral-600 text-primary-500;
+}
+
+.checkboxInput:focus,
+.checkboxInput:active {
+    @apply ring-2 ring-primary-500 ring-offset-2 ring-offset-neutral-700;
+}

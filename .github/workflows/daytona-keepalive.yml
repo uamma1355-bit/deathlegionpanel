@@ -1,0 +1,41 @@
+# Daytona keep-alive — pings the backend every 5 minutes to prevent auto-archive.
+# Free tier: GitHub Actions cron runs every 5 minutes for free on public repos.
+name: Daytona Keep-Alive
+
+on:
+  schedule:
+    # Every 5 minutes — GitHub Actions cron allows this for public repos
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  keepalive:
+    name: Ping Daytona backend
+    runs-on: ubuntu-latest
+    if: github.repository != 'pterodactyl/panel'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ping backend
+        env:
+          DAYTONA_TOKEN: ${{ secrets.DAYTONA_TOKEN }}
+        run: |
+          RESP=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Accept: application/json" \
+            -H "Origin: https://deathlegionpanel.vercel.app" \
+            "https://8000-wwx7nwx3ltspape9.daytonaproxy01.eu/api/client/permissions" || echo "000")
+          echo "Backend status: $RESP"
+          if [ "$RESP" = "000" ]; then
+            echo "Backend unreachable — restarting via Daytona API..."
+            curl -s -X POST \
+              -H "Authorization: Bearer $DAYTONA_TOKEN" \
+              -H "Content-Type: application/json" \
+              "https://app.daytona.io/api/sandbox/210e4afe-d6d5-4cc1-b3d3-05f40077ea15/start" || true
+            sleep 30
+            # Restart Laravel server
+            curl -s -X POST \
+              -H "Authorization: Bearer $DAYTONA_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d '{"command":"cd /home/daytona/backend && nohup php artisan serve --host=0.0.0.0 --port=8000 --no-interaction > storage/logs/server.log 2>&1 < /dev/null & disown; sleep 3; echo restarted","cwd":"/home/daytona","timeout":15}' \
+              "https://app.daytona.io/api/toolbox/210e4afe-d6d5-4cc1-b3d3-05f40077ea15/toolbox/process/execute"
+          fi
