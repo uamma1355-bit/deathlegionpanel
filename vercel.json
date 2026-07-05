@@ -4,7 +4,11 @@
   "buildCommand": "cd shared && npm install --no-audit --no-fund && cd ../frontend && npm ci --no-audit --no-fund && npm run build",
   "outputDirectory": "frontend/dist",
   "installCommand": "echo 'install handled in buildCommand'",
-  "rewrites": [{ "source": "/((?!admin/|api/|sanctum/).*)", "destination": "/index.html" }],
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://8000-210e4afe-d6d5-4cc1-b3d3-05f40077ea15.daytonaproxy01.eu/api/:path*" },
+    { "source": "/sanctum/:path*", "destination": "https://8000-210e4afe-d6d5-4cc1-b3d3-05f40077ea15.daytonaproxy01.eu/sanctum/:path*" },
+    { "source": "/((?!api/|sanctum/|admin/|assets/).*)", "destination": "/index.html" }
+  ],
   "headers": [
     {
       "source": "/assets/(.*)",

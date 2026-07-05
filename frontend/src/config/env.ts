@@ -33,8 +33,15 @@ let cached: RuntimeConfig | null = null;
 
 export function getConfig(): RuntimeConfig {
   if (cached) return cached;
+  // In production on Vercel, we use RELATIVE URLs (empty apiUrl) so all API
+  // requests go through Vercel's rewrite proxy (see vercel.json). This makes
+  // everything same-origin — no CORS, no third-party cookie issues.
+  //
+  // In local dev (vite), we point at the local backend via VITE_API_URL.
+  const rawApiUrl = readEnv('API_URL', '').replace(/\/$/, '');
   cached = {
-    apiUrl: readEnv('API_URL', 'http://127.0.0.1:8000').replace(/\/$/, ''),
+    // Empty = relative URLs (production on Vercel). Non-empty = absolute (local dev).
+    apiUrl: rawApiUrl,
     authMode: parseAuthMode(readEnv('AUTH_MODE', 'cookie')),
     appName: readEnv('APP_NAME', 'Pterodactyl'),
     sentryDsn: readEnv('SENTRY_DSN') || null,
@@ -60,8 +67,15 @@ export function setStoredToken(token: string | null): void {
   }
 }
 
-/** Get the absolute URL for an API path. Handles both leading-slash and no-slash. */
+/** Get the URL for an API path.
+ *  - In production: returns the relative path (e.g. "/api/client/account") —
+ *    Vercel's rewrite proxy forwards it to the backend. Same-origin = no CORS.
+ *  - In local dev: returns the absolute URL against VITE_API_URL.
+ */
 export function apiUrl(path: string): string {
   const trimmed = path.startsWith('/') ? path : `/${path}`;
-  return `${getConfig().apiUrl}${trimmed}`;
+  const cfg = getConfig();
+  // Empty apiUrl = use relative URLs (production via Vercel proxy)
+  if (!cfg.apiUrl) return trimmed;
+  return `${cfg.apiUrl}${trimmed}`;
 }
