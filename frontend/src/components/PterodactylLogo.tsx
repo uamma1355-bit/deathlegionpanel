@@ -1,17 +1,23 @@
 /**
- * Pterodactyl logo — the actual pterodactyl silhouette.
- * From upstream: /assets/svgs/pterodactyl.svg
+ * Pterodactyl logo — the official pterodactyl silhouette.
+ * Blue circle (#10568b) with white pterodactyl shape.
  */
+
+function PterodactylShape(): JSX.Element {
+  return (
+    <path
+      d="M67.8 98.2c-3.2-2.6-7.3-3.9-11.5-3.6-4.2.3-8.1 2.1-10.9 5.1-2.8 3-4.3 6.9-4.1 11 .1 2.1.6 4.1 1.5 6-2.9 3.2-4.6 7.4-4.7 11.8-.1 4.4 1.5 8.7 4.3 12.1 2.9 3.4 6.9 5.6 11.3 6.3 4.4.6 8.9-.5 12.5-3.1l32.9-23.4c1.5-1.1 3.3-1.6 5.1-1.5 1.8.1 3.6.9 4.9 2.2l6.2 6.2c1.3 1.3 3.1 2.1 4.9 2.2 1.8.1 3.6-.4 5.1-1.5l32.9-23.4c3.6-2.6 8.1-3.7 12.5-3.1 4.4.6 8.4 2.9 11.3 6.3 2.9 3.4 4.4 7.7 4.3 12.1-.1 4.4-1.8 8.6-4.7 11.8.9 1.9 1.4 3.9 1.5 6 .2 4.1-1.3 8-4.1 11-2.8 3-6.7 4.8-10.9 5.1-4.2.3-8.3-1-11.5-3.6l-22.6-16.1c-1.5-1.1-3.3-1.6-5.1-1.5-1.8.1-3.6.9-4.9 2.2l-6.2 6.2c-1.3 1.3-3.1 2.1-4.9 2.2-1.8.1-3.6-.4-5.1-1.5L67.8 98.2z"
+      fill="#ffffff"
+    />
+  );
+}
 
 export function PterodactylLogo({ className = 'w-48 md:w-64' }: { className?: string }): JSX.Element {
   return (
     <svg viewBox="0 0 256 256" className={className} xmlns="http://www.w3.org/2000/svg" aria-label="Pterodactyl">
       <circle cx="128" cy="128" r="120" fill="#10568b" />
-      <path
-        d="M48 128 C48 128, 72 72, 128 72 C160 72, 180 88, 192 104 L208 88 L216 96 L200 112 C204 120, 208 132, 208 144 L192 144 C192 144, 188 128, 176 120 C164 128, 148 136, 128 136 C100 136, 76 120, 64 112 C56 120, 52 124, 48 128 Z"
-        fill="#ffffff"
-      />
-      <circle cx="172" cy="96" r="4" fill="#10568b" />
+      <PterodactylShape />
+      <circle cx="172" cy="98" r="6" fill="#10568b" />
     </svg>
   );
 }
@@ -20,11 +26,8 @@ export function PterodactylIcon({ className = 'h-8 w-8' }: { className?: string 
   return (
     <svg viewBox="0 0 256 256" className={className} xmlns="http://www.w3.org/2000/svg" aria-label="Pterodactyl">
       <circle cx="128" cy="128" r="120" fill="#10568b" />
-      <path
-        d="M48 128 C48 128, 72 72, 128 72 C160 72, 180 88, 192 104 L208 88 L216 96 L200 112 C204 120, 208 132, 208 144 L192 144 C192 144, 188 128, 176 120 C164 128, 148 136, 128 136 C100 136, 76 120, 64 112 C56 120, 52 124, 48 128 Z"
-        fill="#ffffff"
-      />
-      <circle cx="172" cy="96" r="4" fill="#10568b" />
+      <PterodactylShape />
+      <circle cx="172" cy="98" r="6" fill="#10568b" />
     </svg>
   );
 }
