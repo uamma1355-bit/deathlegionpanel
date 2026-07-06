@@ -17,15 +17,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const userJson = JSON.stringify(user);
   const passJson = JSON.stringify(password);
 
-  // Python script: login → list keys → delete old ones (>1hr or >20 total) → create new key
+  // Simple script: login → create API key → return token
+  // NO key deletion — the limit is now 1000
   const pyScript = `import json, subprocess, tempfile, os
-from datetime import datetime, timedelta
 
 user_val = ${userJson}
 pass_val = ${passJson}
 cookie_file = tempfile.mktemp()
 
-# Step 1: Login
+# Login
 login_result = subprocess.run([
     'curl', '-s', '-c', cookie_file,
     '-H', 'Accept: application/json', '-H', 'Content-Type: application/json',
@@ -54,51 +54,7 @@ if not login_data.get('data', {}).get('complete'):
 
 user_info = login_data.get('data', {}).get('user', {})
 
-# Step 2: List existing API keys
-list_result = subprocess.run([
-    'curl', '-s', '-b', cookie_file,
-    '-H', 'Accept: application/json',
-    'http://127.0.0.1:8000/api/client/account/api-keys'
-], capture_output=True, text=True)
-
-try:
-    list_data = json.loads(list_result.stdout)
-    old_keys = list_data.get('data', [])
-    
-    # If more than 20 keys, delete the oldest ones
-    if len(old_keys) > 20:
-        # Sort by created_at and delete oldest
-        old_keys.sort(key=lambda k: k.get('attributes', {}).get('created_at', ''))
-        for key in old_keys[:len(old_keys) - 15]:
-            ident = key.get('attributes', {}).get('identifier', '')
-            if ident:
-                subprocess.run([
-                    'curl', '-s', '-b', cookie_file,
-                    '-X', 'DELETE',
-                    f'http://127.0.0.1:8000/api/client/account/api-keys/{ident}'
-                ], capture_output=True, text=True)
-    
-    # Delete only "browser-session" keys older than 1 hour
-    cutoff = datetime.now() - timedelta(hours=1)
-    for key in old_keys:
-        ident = key.get('attributes', {}).get('identifier', '')
-        desc = key.get('attributes', {}).get('description', '')
-        created = key.get('attributes', {}).get('created_at', '')
-        if desc == 'browser-session' and ident and created:
-            try:
-                created_dt = datetime.fromisoformat(created.replace('Z', '+00:00').replace('+00:00', ''))
-                if created_dt < cutoff:
-                    subprocess.run([
-                        'curl', '-s', '-b', cookie_file,
-                        '-X', 'DELETE',
-                        f'http://127.0.0.1:8000/api/client/account/api-keys/{ident}'
-                    ], capture_output=True, text=True)
-            except:
-                pass
-except:
-    pass
-
-# Step 3: Create new API key
+# Create API key (no deletion — limit is 1000)
 key_result = subprocess.run([
     'curl', '-s', '-b', cookie_file,
     '-H', 'Accept: application/json', '-H', 'Content-Type: application/json',
