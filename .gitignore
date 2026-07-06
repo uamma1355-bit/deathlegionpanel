@@ -33,3 +33,4 @@ Thumbs.db
 pterodactyl-source/
 agent-ctx/
 tool-results/
+.vercel
