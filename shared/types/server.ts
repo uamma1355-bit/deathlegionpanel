@@ -1,72 +1,52 @@
 import type { JsonApiResource } from './api.js';
 
-export interface AllocationAttributes {
-  id: number;
-  ip: string;
-  alias: string | null;
-  port: number;
-  notes: string | null;
-  is_default: boolean;
-  [key: string]: unknown;
-}
-
+/**
+ * Server attributes — matches the ACTUAL upstream Pterodactyl v1.11
+ * ServerTransformer output. All fields optional because the list and
+ * detail endpoints return slightly different shapes.
+ */
 export interface ServerAttributes {
-  id: string;
-  external_id: string | null;
-  uuid: string;
-  identifier: string;
-  name: string;
-  description: string;
-  suspended: boolean;
-  status: string | null;
-  limits: {
-    memory: number;
-    swap: number;
-    disk: number;
-    io: number;
-    cpu: number;
-    threads: string | null;
-    oom_disabled: boolean;
+  internal_id?: number;
+  uuid?: string;
+  identifier?: string;
+  name?: string;
+  description?: string;
+  status?: string | null;
+  server_owner?: boolean;
+  is_suspended?: boolean;
+  is_installing?: boolean;
+  is_transferring?: boolean;
+  is_node_under_maintenance?: boolean;
+  node?: string | number;
+  invocation?: string;
+  docker_image?: string;
+  egg_features?: unknown;
+  sftp_details?: { ip?: string; port?: number };
+  limits?: {
+    memory?: number;
+    swap?: number;
+    disk?: number;
+    io?: number;
+    cpu?: number;
+    threads?: string | null;
+    oom_disabled?: boolean;
   };
-  feature_limits: {
-    databases: number;
-    allocations: number;
-    backups: number;
+  feature_limits?: {
+    databases?: number;
+    allocations?: number;
+    backups?: number;
   };
-  user: number;
-  node: number;
-  allocation: number;
-  nest: number;
-  egg: number;
-  container: {
-    startup_command: string;
-    image: string;
-    installed: boolean;
-    environment: Record<string, string>;
-  };
-  created_at: string;
-  updated_at: string;
+  relationships?: unknown;
   [key: string]: unknown;
 }
 
 export interface ServerMeta {
-  is_server_owner: boolean;
-  user_permissions: string[];
-}
-
-export interface ServerRelationships {
-  allocation?: JsonApiResource<AllocationAttributes>;
-  allocations?: JsonApiResource<AllocationAttributes>[];
-  egg?: JsonApiResource;
-  nest?: JsonApiResource;
-  node?: JsonApiResource;
-  databases?: JsonApiResource[];
-  subusers?: JsonApiResource[];
+  is_server_owner?: boolean;
+  user_permissions?: string[];
 }
 
 export type ServerResponse = JsonApiResource<ServerAttributes> & {
   meta?: ServerMeta;
-  relationships?: ServerRelationships;
 };
 
 export type ServerListResponse = {
@@ -74,8 +54,6 @@ export type ServerListResponse = {
   data: JsonApiResource<ServerAttributes>[];
   [key: string]: unknown;
 };
-
-export type AllocationResponse = JsonApiResource<AllocationAttributes>;
 
 export interface WebsocketTokenResponse extends JsonApiResource {
   attributes: { token: string; socket: string; [key: string]: unknown };

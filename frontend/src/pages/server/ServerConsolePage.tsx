@@ -207,14 +207,14 @@ export function ServerConsolePage(): JSX.Element {
             <StatBlock
               label="Address"
               value={
-                server?.relationships?.allocation?.attributes
-                  ? `${server.relationships.allocation.attributes.ip}:${server.relationships.allocation.attributes.port}`
+                server?.attributes?.sftp_details
+                  ? `${server.attributes.sftp_details.ip ?? '—'}:${server.attributes.sftp_details.port ?? '—'}`
                   : '—'
               }
             />
-            <StatBlock label="CPU Limit" value={`${server?.attributes.limits.cpu}%`} />
-            <StatBlock label="Memory Limit" value={`${server?.attributes.limits.memory} MB`} />
-            <StatBlock label="Disk Limit" value={`${server?.attributes.limits.disk} MB`} />
+            <StatBlock label="CPU Limit" value={`${server?.attributes.limits?.cpu ?? 0}%`} />
+            <StatBlock label="Memory Limit" value={`${server?.attributes.limits?.memory ?? 0} MB`} />
+            <StatBlock label="Disk Limit" value={`${server?.attributes.limits?.disk ?? 0} MB`} />
           </div>
         </div>
       </div>

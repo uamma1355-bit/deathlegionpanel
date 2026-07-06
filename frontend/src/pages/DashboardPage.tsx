@@ -1,11 +1,5 @@
 /**
  * Dashboard page — Pterodactyl-style server list.
- *
- * Verbatim visual structure from upstream DashboardContainer + ServerRow:
- *  - PageContentBlock wrapper with title "Dashboard"
- *  - ServerRow cards: bg-neutral-700/60 rounded p-4 with hover effect,
- *    status bar on the right, server icon + name + description + resource
- *    icons (CPU/Memory/Disk).
  */
 
 import { useQuery } from '@tanstack/react-query';
@@ -43,18 +37,19 @@ export function DashboardPage(): JSX.Element {
           <div className="space-y-2">
             {data.data.map((s) => {
               const a = s.attributes;
+              const status = a.status ?? (a.is_suspended ? 'suspended' : 'offline');
               return (
                 <Link
-                  key={a.uuid}
-                  to={`/server/${a.identifier}`}
+                  key={a.uuid ?? a.identifier ?? Math.random()}
+                  to={`/server/${a.identifier ?? a.uuid}`}
                   className="group relative block overflow-hidden rounded bg-neutral-700/60 p-4 transition-all duration-150 hover:bg-neutral-700"
                 >
-                  {/* status bar (right edge) — verbatim from upstream ServerRow */}
+                  {/* status bar (right edge) */}
                   <span
                     className={`absolute right-0 z-20 m-1 w-2 rounded-full transition-all duration-150 group-hover:opacity-75 ${
-                      !a.status || a.status === 'offline'
+                      !status || status === 'offline'
                         ? 'bg-red-500'
-                        : a.status === 'running'
+                        : status === 'running'
                           ? 'bg-green-500'
                           : 'bg-yellow-500'
                     }`}
@@ -70,9 +65,9 @@ export function DashboardPage(): JSX.Element {
                         </svg>
                       </div>
                       <div className="min-w-0 flex-1">
-                        <h2 className="truncate font-header text-lg text-gray-50">{a.name}</h2>
+                        <h2 className="truncate font-header text-lg text-gray-50">{a.name ?? 'Unnamed Server'}</h2>
                         <p className="truncate text-xs text-neutral-400">
-                          {a.container.image}
+                          {a.docker_image ?? 'No image set'}
                         </p>
                       </div>
                     </div>
@@ -86,7 +81,7 @@ export function DashboardPage(): JSX.Element {
                           </svg>
                         }
                         label="CPU"
-                        value={`${a.limits.cpu}%`}
+                        value={`${a.limits?.cpu ?? 0}%`}
                       />
                       <ResourceStat
                         icon={
@@ -95,7 +90,7 @@ export function DashboardPage(): JSX.Element {
                           </svg>
                         }
                         label="Memory"
-                        value={`${a.limits.memory} MB`}
+                        value={`${a.limits?.memory ?? 0} MB`}
                       />
                       <ResourceStat
                         icon={
@@ -104,7 +99,7 @@ export function DashboardPage(): JSX.Element {
                           </svg>
                         }
                         label="Disk"
-                        value={`${a.limits.disk} MB`}
+                        value={`${a.limits?.disk ?? 0} MB`}
                       />
                     </div>
                   </div>
