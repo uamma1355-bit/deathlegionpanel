@@ -34,3 +34,4 @@ pterodactyl-source/
 agent-ctx/
 tool-results/
 .vercel
+.env*
