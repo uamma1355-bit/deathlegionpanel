@@ -35,6 +35,7 @@ export function ServerConsolePage(): JSX.Element {
     serverUuid: uuid,
     enabled: !!uuid && canConsole,
     onEvent: (ev) => {
+      // Handle WebSocket events
       switch (ev.event) {
         case 'console output':
           if (typeof ev.args[0] === 'string') {
@@ -161,7 +162,9 @@ export function ServerConsolePage(): JSX.Element {
                 <div className="flex h-full items-center justify-center text-neutral-600">
                   {state.status === 'open' && state.authenticated
                     ? 'Console output will appear here when the server is running…'
-                    : 'Connecting to server…'}
+                    : state.lastError
+                      ? `Connection failed: ${state.lastError}. The Wings daemon is running on the backend but the WebSocket URL (ws://localhost:8080) is not reachable from your browser. This is expected in the Daytona sandbox deployment. Power commands still work via the API.`
+                      : 'Connecting to server…'}
                 </div>
               ) : (
                 lines.map((line) => (

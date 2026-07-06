@@ -4,24 +4,18 @@ const DAYTONA_TOKEN = process.env.DAYTONA_TOKEN || '';
 const SANDBOX_ID = '210e4afe-d6d5-4cc1-b3d3-05f40077ea15';
 const DAYTONA_API = 'https://app.daytona.io/api';
 
-/**
- * Proxy for the admin Blade area.
- * Since the admin area needs Laravel session cookies, this function:
- *   1. Logs in as admin (using env credentials) to get a session cookie
- *   2. Fetches the admin page with that session cookie
- *   3. Returns the HTML
- */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const path = req.url?.replace(/^\/admin/, '') || '/';
   const backendPath = `/admin${path === '/' ? '' : path}`;
   
-  // Python script that logs in + fetches admin page
+  const escapedPath = backendPath.replace(/'/g, "\\'");
+  
   const pyScript = `import json, subprocess, tempfile, os
 
 cookie_file = tempfile.mktemp()
 
-# Step 1: Login as admin to get session
-login_result = subprocess.run([
+# Login as admin
+subprocess.run([
     'curl', '-s', '-c', cookie_file, '-o', '/dev/null',
     '-H', 'Accept: application/json', '-H', 'Content-Type: application/json',
     '-X', 'POST',
@@ -29,15 +23,17 @@ login_result = subprocess.run([
     'http://127.0.0.1:8000/api/client/auth/login'
 ], capture_output=True, text=True)
 
-# Step 2: Fetch admin page with session cookie
-admin_result = subprocess.run([
-    'curl', '-s', '-b', cookie_file, '-w', '\\n__HTTP_STATUS__:%{http_code}',
-    'http://127.0.0.1:8000${backendPath.replace(/'/g, "\\'")}'
+# Fetch admin page
+result = subprocess.run([
+    'curl', '-s', '-b', cookie_file,
+    'http://127.0.0.1:8000${escapedPath}'
 ], capture_output=True, text=True)
 
 if os.path.exists(cookie_file): os.unlink(cookie_file)
 
-print(admin_result.stdout)
+# Return ONLY the body (no status marker)
+sys_out = result.stdout
+print(sys_out)
 `;
 
   const executeUrl = `${DAYTONA_API}/toolbox/${SANDBOX_ID}/toolbox/process/execute`;
@@ -59,19 +55,22 @@ print(admin_result.stdout)
     const data = await response.json();
     const result: string = data.result || '';
     
-    // Extract HTTP status
-    const statusMatch = result.match(/__HTTP_STATUS__:(\d+)$/);
-    const httpStatus = statusMatch ? parseInt(statusMatch[1], 10) : 200;
-    const body = statusMatch 
-      ? result.slice(0, result.length - statusMatch[0].length).replace(/\n$/, '')
-      : result;
+    // The result from the execute API is JSON-encoded, so we need to handle it
+    // The Python script prints the HTML, which becomes the "result" field
+    let body = result;
+    
+    // Strip any trailing __HTTP_STATUS__ marker if present
+    const statusMatch = body.match(/\n__HTTP_STATUS__:(\d+)$/);
+    if (statusMatch) {
+      body = body.slice(0, body.length - statusMatch[0].length);
+    }
     
     // Set content type
     if (body.includes('<!DOCTYPE html>') || body.includes('<html')) {
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
     }
     
-    return res.status(httpStatus).send(body);
+    return res.status(200).send(body);
   } catch (err) {
     return res.status(500).send(`Admin proxy failed: ${err instanceof Error ? err.message : String(err)}`);
   }
