@@ -95,11 +95,13 @@ export async function createApiKey(description: string): Promise<string> {
   const data = res.data as {
     attributes?: { identifier?: string };
     meta?: { secret_token?: string };
+    errors?: { code?: string; detail?: string }[];
   };
   const identifier = data.attributes?.identifier;
   const secretToken = data.meta?.secret_token;
   if (!identifier || !secretToken) {
-    throw new Error('Failed to create API key — missing identifier or secret_token');
+    const errMsg = data.errors?.[0]?.detail ?? JSON.stringify(data).slice(0, 200);
+    throw new Error(`Failed to create API key: ${errMsg}`);
   }
   // The full API key is identifier + secret_token (concatenated, no separator)
   return identifier + secretToken;
