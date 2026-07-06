@@ -7,7 +7,7 @@
 
 import { useAuth } from '@/auth/AuthProvider';
 import { useTranslation } from 'react-i18next';
-import { ContentContainer } from '@/components/ContentContainer';
+import { ContentContainer } from '@/components/AppLayout';
 
 export function AccountPage(): JSX.Element {
   const { t } = useTranslation();
