@@ -1,6 +1,5 @@
 # Frontend CI — runs on every push and PR.
 # Validates that the React/TypeScript frontend builds clean.
-# Reference: docs/02-MigrationStrategy.md (Definition of done per phase).
 name: Frontend CI
 
 on:
@@ -35,7 +34,7 @@ jobs:
 
       - name: Install frontend deps
         working-directory: frontend
-        run: npm ci --no-audit --no-fund
+        run: npm install --legacy-peer-deps --no-audit --no-fund
 
       - name: TypeScript strict check
         working-directory: frontend

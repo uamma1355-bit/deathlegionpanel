@@ -1,4 +1,5 @@
 // ESLint flat config (ESLint 8.57+ / 9.x compatible).
+// No dependency on @eslint/js — we use the TS plugin's recommended rules directly.
 
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
