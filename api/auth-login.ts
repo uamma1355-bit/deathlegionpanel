@@ -6,59 +6,72 @@ const DAYTONA_API = 'https://app.daytona.io/api';
 
 /**
  * Combined login + API key creation endpoint.
- * 
- * The browser calls this with {user, password}. This function:
- *   1. Logs in via curl (gets session cookie)
- *   2. Creates an API key using the session cookie
- *   3. Returns {token, user} in one response
- * 
- * The browser then uses the token (Authorization: Bearer ptlc_...) for all
- * subsequent requests via /api/[...path].ts — no cookies needed.
+ * Runs a shell script inside the sandbox that:
+ *   1. Logs in (saves session cookie to a file)
+ *   2. Creates an API key (using that cookie)
+ *   3. Returns the token + user info
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ errors: [{ code: 'MethodNotAllowed', status: '405' }] });
   }
 
-  const { user, password } = req.body as { user: string; password: string };
+  const { user, password } = req.body as { user?: string; password?: string };
   if (!user || !password) {
     return res.status(400).json({ errors: [{ code: 'ValidationError', detail: 'user and password required' }] });
   }
 
-  const escapedUser = user.replace(/'/g, "'\\''");
-  const escapedPass = password.replace(/'/g, "'\\''");
+  // Write the login+key script to a temp file, then execute it
+  // This avoids shell quoting issues with the JSON body
+  const script = `cat > /tmp/login_script.sh << 'ENDSCRIPT'
+#!/bin/bash
+set -e
+COOKIE_FILE=$(mktemp)
 
-  // Combined script: login → extract session cookie → create API key → return token
-  // All in one curl pipeline inside the sandbox
-  const script = `COOKIE_FILE=$(mktemp) && \
-curl -s -c "$COOKIE_FILE" -H 'Accept: application/json' -H 'Content-Type: application/json' \
-  -X POST -d '{"user":"${escapedUser}","password":"${escapedPass}"}' \
-  http://127.0.0.1:8000/api/client/auth/login > /tmp/login_resp.json && \
-LOGIN_COMPLETE=$(python3 -c "import json; d=json.load(open('/tmp/login_resp.json')); print(d.get('data',{}).get('complete', False))" 2>/dev/null) && \
-if [ "$LOGIN_COMPLETE" != "True" ]; then \
-  cat /tmp/login_resp.json; \
-  rm -f "$COOKIE_FILE" /tmp/login_resp.json; \
-  exit 0; \
-fi && \
+# Step 1: Login
+LOGIN_RESP=$(curl -s -c "$COOKIE_FILE" -H 'Accept: application/json' -H 'Content-Type: application/json' \
+  -X POST -d '{"user":"'${USER_VAL}'","password":"'${PASS_VAL}'"}' \
+  http://127.0.0.1:8000/api/client/auth/login)
+
+# Check if login succeeded
+COMPLETE=$(echo "$LOGIN_RESP" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('data',{}).get('complete',False))" 2>/dev/null || echo "False")
+if [ "$COMPLETE" != "True" ]; then
+  echo "$LOGIN_RESP"
+  rm -f "$COOKIE_FILE"
+  exit 0
+fi
+
+# Extract user info
+USER_INFO=$(echo "$LOGIN_RESP" | python3 -c "import json,sys; d=json.load(sys.stdin); print(json.dumps(d.get('data',{}).get('user',{})))" 2>/dev/null)
+
+# Step 2: Create API key using the session cookie
 KEY_RESP=$(curl -s -b "$COOKIE_FILE" -H 'Accept: application/json' -H 'Content-Type: application/json' \
   -X POST -d '{"description":"browser-session","allowed_ips":[]}' \
-  http://127.0.0.1:8000/api/client/account/api-keys) && \
+  http://127.0.0.1:8000/api/client/account/api-keys)
+
+# Extract identifier + secret_token
+IDENTIFIER=$(echo "$KEY_RESP" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('attributes',{}).get('identifier',''))" 2>/dev/null)
+SECRET=$(echo "$KEY_RESP" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('meta',{}).get('secret_token',''))" 2>/dev/null)
+
+FULL_TOKEN="${IDENTIFIER}${SECRET}"
+
+# Step 3: Return combined response
 python3 -c "
 import json
-login = json.load(open('/tmp/login_resp.json'))
-key = json.loads('''$KEY_RESP''')
-identifier = key.get('attributes',{}).get('identifier','')
-token = key.get('meta',{}).get('secret_token','')
-full_token = identifier + token if identifier and token else ''
-user_data = login.get('data',{}).get('user',{})
+user = json.loads('''${USER_INFO}''')
 result = {
-    'token': full_token,
-    'user': user_data,
+    'token': '${FULL_TOKEN}',
+    'user': user,
     'complete': True,
 }
 print(json.dumps(result))
-" && \
-rm -f "$COOKIE_FILE" /tmp/login_resp.json`;
+"
+
+rm -f "$COOKIE_FILE"
+ENDSCRIPT
+chmod +x /tmp/login_script.sh
+USER_VAL='${user.replace(/'/g, "'\\''")}' PASS_VAL='${password.replace(/'/g, "'\\''")}' bash /tmp/login_script.sh
+rm -f /tmp/login_script.sh`;
 
   const executeUrl = `${DAYTONA_API}/toolbox/${SANDBOX_ID}/toolbox/process/execute`;
 
@@ -77,53 +90,34 @@ rm -f "$COOKIE_FILE" /tmp/login_resp.json`;
     });
 
     if (!response.ok) {
-      const errText = await response.text();
       return res.status(502).json({
-        errors: [{
-          code: 'ProxyError',
-          status: '502',
-          detail: `Daytona API error: ${response.status}`,
-        }],
+        errors: [{ code: 'ProxyError', status: '502', detail: `Daytona API error: ${response.status}` }],
       });
     }
 
     const data = await response.json();
-    const result: string = data.result || '';
+    const result: string = (data.result || '').trim();
 
-    // Try to parse the result as JSON
     try {
-      const parsed = JSON.parse(result.trim());
-      
-      // Check if it's an error response from the backend
+      const parsed = JSON.parse(result);
       if (parsed.errors) {
         return res.status(400).json(parsed);
       }
-      
-      // Check if it's a 2FA challenge
       if (parsed.data && parsed.data.complete === false && parsed.data.confirmation_token) {
         return res.status(200).json({
           complete: false,
           confirmation_token: parsed.data.confirmation_token,
         });
       }
-      
-      // Success — return token + user
       return res.status(200).json(parsed);
     } catch {
-      // Not JSON — return as error
       return res.status(500).json({
-        errors: [{
-          code: 'ParseError',
-          detail: `Failed to parse response: ${result.slice(0, 200)}`,
-        }],
+        errors: [{ code: 'ParseError', detail: `Failed to parse: ${result.slice(0, 300)}` }],
       });
     }
   } catch (err) {
     return res.status(500).json({
-      errors: [{
-        code: 'ProxyError',
-        detail: `Login proxy failed: ${err instanceof Error ? err.message : String(err)}`,
-      }],
+      errors: [{ code: 'ProxyError', detail: `Login failed: ${err instanceof Error ? err.message : String(err)}` }],
     });
   }
 }
