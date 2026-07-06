@@ -7,9 +7,7 @@
   "rewrites": [
     { "source": "/api/client/auth/login", "destination": "/api/auth-login" },
     { "source": "/api/:path*", "destination": "/api/[...path]" },
-    { "source": "/admin", "destination": "/api/admin" },
-    { "source": "/admin/:path*", "destination": "/api/admin" },
-    { "source": "/((?!api/|admin|assets/).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|assets/).*)", "destination": "/index.html" }
   ],
   "headers": [
     {

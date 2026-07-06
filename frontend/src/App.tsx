@@ -4,7 +4,7 @@
 
 import { Navigate, Route, Routes } from 'react-router-dom';
 
-import { AuthenticatedRoute } from '@/auth/PermissionRoute';
+import { AuthenticatedRoute, AdminRoute } from '@/auth/PermissionRoute';
 import { AppLayout, AuthLayout } from '@/components/AppLayout';
 import { ServerLayout } from '@/components/ServerLayout';
 import { ServerProvider } from '@/state/server-context';
@@ -15,6 +15,7 @@ import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { AccountPage } from '@/pages/AccountPage';
+import { AdminPage } from '@/pages/admin/AdminPage';
 import { ServerConsolePage } from '@/pages/server/ServerConsolePage';
 import { ServerFilesPage } from '@/pages/server/ServerFilesPage';
 import { ServerBackupsPage } from '@/pages/server/ServerBackupsPage';
@@ -38,29 +39,16 @@ export function App(): JSX.Element {
       </Route>
 
       {/* Dashboard */}
-      <Route
-        path="/"
-        element={
-          <AuthenticatedRoute>
-            <AppLayout />
-          </AuthenticatedRoute>
-        }
-      >
+      <Route path="/" element={<AuthenticatedRoute><AppLayout /></AuthenticatedRoute>}>
         <Route index element={<DashboardPage />} />
         <Route path="account" element={<AccountPage />} />
+        <Route path="admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
       </Route>
 
-      {/* Server (per-server sub-pages) */}
-      <Route
-        path="/server/:id"
-        element={
-          <AuthenticatedRoute>
-            <ServerProvider>
-              <ServerLayout />
-            </ServerProvider>
-          </AuthenticatedRoute>
-        }
-      >
+      {/* Server */}
+      <Route path="/server/:id" element={
+        <AuthenticatedRoute><ServerProvider><ServerLayout /></ServerProvider></AuthenticatedRoute>
+      }>
         <Route index element={<ServerConsolePage />} />
         <Route path="files" element={<ServerFilesPage />} />
         <Route path="backups" element={<ServerBackupsPage />} />
