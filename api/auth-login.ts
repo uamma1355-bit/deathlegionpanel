@@ -4,13 +4,6 @@ const DAYTONA_TOKEN = process.env.DAYTONA_TOKEN || '';
 const SANDBOX_ID = '210e4afe-d6d5-4cc1-b3d3-05f40077ea15';
 const DAYTONA_API = 'https://app.daytona.io/api';
 
-/**
- * Combined login + API key creation endpoint.
- * Runs a shell script inside the sandbox that:
- *   1. Logs in (saves session cookie to a file)
- *   2. Creates an API key (using that cookie)
- *   3. Returns the token + user info
- */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ errors: [{ code: 'MethodNotAllowed', status: '405' }] });
@@ -21,57 +14,74 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ errors: [{ code: 'ValidationError', detail: 'user and password required' }] });
   }
 
-  // Write the login+key script to a temp file, then execute it
-  // This avoids shell quoting issues with the JSON body
-  const script = `cat > /tmp/login_script.sh << 'ENDSCRIPT'
-#!/bin/bash
-set -e
-COOKIE_FILE=$(mktemp)
+  // Use a Python script for proper string handling — bash quoting with JSON is fragile
+  const pyScript = `import json, subprocess, tempfile, os
+
+user_val = ${JSON.stringify(user)}
+pass_val = ${JSON.stringify(password)}
+
+cookie_file = tempfile.mktemp()
 
 # Step 1: Login
-LOGIN_RESP=$(curl -s -c "$COOKIE_FILE" -H 'Accept: application/json' -H 'Content-Type: application/json' \
-  -X POST -d '{"user":"'${USER_VAL}'","password":"'${PASS_VAL}'"}' \
-  http://127.0.0.1:8000/api/client/auth/login)
+login_result = subprocess.run([
+    'curl', '-s', '-c', cookie_file,
+    '-H', 'Accept: application/json',
+    '-H', 'Content-Type: application/json',
+    '-X', 'POST',
+    '-d', json.dumps({"user": user_val, "password": pass_val}),
+    'http://127.0.0.1:8000/api/client/auth/login'
+], capture_output=True, text=True)
 
-# Check if login succeeded
-COMPLETE=$(echo "$LOGIN_RESP" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('data',{}).get('complete',False))" 2>/dev/null || echo "False")
-if [ "$COMPLETE" != "True" ]; then
-  echo "$LOGIN_RESP"
-  rm -f "$COOKIE_FILE"
-  exit 0
-fi
+try:
+    login_data = json.loads(login_result.stdout)
+except:
+    print(json.dumps({"errors": [{"code": "LoginError", "detail": "Failed to parse login response"}]}))
+    os.unlink(cookie_file)
+    exit(0)
 
-# Extract user info
-USER_INFO=$(echo "$LOGIN_RESP" | python3 -c "import json,sys; d=json.load(sys.stdin); print(json.dumps(d.get('data',{}).get('user',{})))" 2>/dev/null)
+# Check for 2FA
+if login_data.get('data', {}).get('complete') is False:
+    token = login_data.get('data', {}).get('confirmation_token', '')
+    print(json.dumps({"complete": False, "confirmation_token": token}))
+    os.unlink(cookie_file)
+    exit(0)
 
-# Step 2: Create API key using the session cookie
-KEY_RESP=$(curl -s -b "$COOKIE_FILE" -H 'Accept: application/json' -H 'Content-Type: application/json' \
-  -X POST -d '{"description":"browser-session","allowed_ips":[]}' \
-  http://127.0.0.1:8000/api/client/account/api-keys)
+# Check login success
+if not login_data.get('data', {}).get('complete'):
+    print(json.dumps({"errors": [{"code": "LoginFailed", "detail": "Invalid credentials"}]}))
+    os.unlink(cookie_file)
+    exit(0)
 
-# Extract identifier + secret_token
-IDENTIFIER=$(echo "$KEY_RESP" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('attributes',{}).get('identifier',''))" 2>/dev/null)
-SECRET=$(echo "$KEY_RESP" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('meta',{}).get('secret_token',''))" 2>/dev/null)
+user_info = login_data.get('data', {}).get('user', {})
 
-FULL_TOKEN="${IDENTIFIER}${SECRET}"
+# Step 2: Create API key
+key_result = subprocess.run([
+    'curl', '-s', '-b', cookie_file,
+    '-H', 'Accept: application/json',
+    '-H', 'Content-Type: application/json',
+    '-X', 'POST',
+    '-d', json.dumps({"description": "browser-session", "allowed_ips": []}),
+    'http://127.0.0.1:8000/api/client/account/api-keys'
+], capture_output=True, text=True)
+
+try:
+    key_data = json.loads(key_result.stdout)
+except:
+    key_data = {}
+
+identifier = key_data.get('attributes', {}).get('identifier', '')
+secret = key_data.get('meta', {}).get('secret_token', '')
+full_token = identifier + secret if identifier and secret else ''
+
+os.unlink(cookie_file)
 
 # Step 3: Return combined response
-python3 -c "
-import json
-user = json.loads('''${USER_INFO}''')
-result = {
-    'token': '${FULL_TOKEN}',
-    'user': user,
-    'complete': True,
-}
-print(json.dumps(result))
-"
-
-rm -f "$COOKIE_FILE"
-ENDSCRIPT
-chmod +x /tmp/login_script.sh
-USER_VAL='${user.replace(/'/g, "'\\''")}' PASS_VAL='${password.replace(/'/g, "'\\''")}' bash /tmp/login_script.sh
-rm -f /tmp/login_script.sh`;
+print(json.dumps({
+    "token": full_token,
+    "user": user_info,
+    "complete": True
+}))
+`;
 
   const executeUrl = `${DAYTONA_API}/toolbox/${SANDBOX_ID}/toolbox/process/execute`;
 
@@ -83,7 +93,7 @@ rm -f /tmp/login_script.sh`;
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        command: script,
+        command: `python3 -c '${pyScript.replace(/'/g, "'\\''")}'`,
         cwd: '/home/daytona',
         timeout: 30,
       }),
@@ -102,12 +112,6 @@ rm -f /tmp/login_script.sh`;
       const parsed = JSON.parse(result);
       if (parsed.errors) {
         return res.status(400).json(parsed);
-      }
-      if (parsed.data && parsed.data.complete === false && parsed.data.confirmation_token) {
-        return res.status(200).json({
-          complete: false,
-          confirmation_token: parsed.data.confirmation_token,
-        });
       }
       return res.status(200).json(parsed);
     } catch {
