@@ -449,8 +449,8 @@ print("PATCHED")
         timeout=180,
     )
 
-    # Step 8: Start server + queue + create admin if missing
-    print("  Step 8/8: Starting server")
+    # Step 8: Start server + queue + Docker + Wings + create admin if missing
+    print("  Step 8/9: Starting server + queue worker")
     exec_cmd(
         sandbox_id,
         "cd /home/daytona/backend && "
@@ -459,6 +459,58 @@ print("PATCHED")
         "setsid nohup php artisan serve --host=0.0.0.0 --port=8000 --no-interaction > storage/logs/server.log 2>&1 < /dev/null & disown;"
         "sleep 4; echo OK",
         timeout=20,
+    )
+
+    # Step 9: Install Docker + Wings (for game server hosting)
+    print("  Step 9/9: Installing Docker + Wings")
+    exec_cmd(
+        sandbox_id,
+        # Install Docker if not present
+        "which docker >/dev/null 2>&1 || (curl -fsSL https://get.docker.com -o /tmp/get-docker.sh && sh /tmp/get-docker.sh) ; "
+        # Start Docker daemon
+        "sudo dockerd > /tmp/dockerd.log 2>&1 & sleep 5; "
+        # Install Wings if not present
+        "which wings >/dev/null 2>&1 || (sudo curl -fsSL -o /usr/local/bin/wings https://github.com/pterodactyl/wings/releases/download/v1.13.1/wings_linux_amd64 && sudo chmod +x /usr/local/bin/wings) ; "
+        # Create config directory
+        "sudo mkdir -p /etc/pterodactyl /var/lib/pterodactyl/volumes ; "
+        # Regenerate daemon_token + write config + start Wings
+        f"cd /home/daytona/backend && php -r \""
+        f"require 'vendor/autoload.php'; \\$app = require 'bootstrap/app.php'; \\$app->make('Illuminate\\\\Contracts\\\\Console\\\\Kernel')->bootstrap(); "
+        f"use Pterodactyl\\\\Models\\\\Node; use Illuminate\\\\Support\\\\Str; "
+        f"\\$node = Node::find(1); "
+        f"if (\\$node) {{ "
+        f"  \\$tokenId = Str::random(16); "
+        f"  \\$plainToken = Str::random(64); "
+        f"  \\\\DB::table('nodes')->where('id', 1)->update(['daemon_token_id' => \\$tokenId, 'daemon_token' => encrypt(\\$plainToken), 'fqdn' => 'localhost', 'scheme' => 'http']); "
+        f"  echo 'TOKEN_ID:' . \\$tokenId . chr(10); "
+        f"  echo 'TOKEN:' . \\$plainToken . chr(10); "
+        f"}} else echo 'NO_NODE' . chr(10); "
+        f"\" > /tmp/token_info.txt 2>&1 ; "
+        # Read token info + write Wings config
+        "TOKEN_ID=$(grep TOKEN_ID: /tmp/token_info.txt | cut -d: -f2) && "
+        "TOKEN=$(grep TOKEN: /tmp/token_info.txt | cut -d: -f2) && "
+        "if [ -n \"$TOKEN_ID\" ] && [ -n \"$TOKEN\" ]; then "
+        "  echo 'debug: false' | sudo tee /etc/pterodactyl/config.yml > /dev/null && "
+        "  echo 'api:' | sudo tee -a /etc/pterodactyl/config.yml > /dev/null && "
+        "  echo '  host: 127.0.0.1' | sudo tee -a /etc/pterodactyl/config.yml > /dev/null && "
+        "  echo '  port: 8080' | sudo tee -a /etc/pterodactyl/config.yml > /dev/null && "
+        "  echo '  ssl:' | sudo tee -a /etc/pterodactyl/config.yml > /dev/null && "
+        "  echo '    enabled: false' | sudo tee -a /etc/pterodactyl/config.yml > /dev/null && "
+        "  echo 'system:' | sudo tee -a /etc/pterodactyl/config.yml > /dev/null && "
+        "  echo '  data: /var/lib/pterodactyl/volumes' | sudo tee -a /etc/pterodactyl/config.yml > /dev/null && "
+        "  echo '  sftp:' | sudo tee -a /etc/pterodactyl/config.yml > /dev/null && "
+        "  echo '    bind_port: 2022' | sudo tee -a /etc/pterodactyl/config.yml > /dev/null && "
+        "  echo '  user:' | sudo tee -a /etc/pterodactyl/config.yml > /dev/null && "
+        "  echo '    root: true' | sudo tee -a /etc/pterodactyl/config.yml > /dev/null && "
+        "  echo 'remote: http://127.0.0.1:8000' | sudo tee -a /etc/pterodactyl/config.yml > /dev/null && "
+        "  echo 'token_id: \"'\"$TOKEN_ID\"'\"' | sudo tee -a /etc/pterodactyl/config.yml > /dev/null && "
+        "  echo 'token: \"'\"$TOKEN\"'\"' | sudo tee -a /etc/pterodactyl/config.yml > /dev/null && "
+        "  sudo setsid nohup /usr/local/bin/wings --config /etc/pterodactyl/config.yml > /tmp/wings.log 2>&1 < /dev/null & disown; "
+        "  sleep 5; "
+        "  curl -s -o /dev/null -w WINGS=%{http_code} http://127.0.0.1:8080/api/system; echo; "
+        "fi; "
+        "echo WINGS_SETUP_DONE",
+        timeout=300,
     )
 
     # Create admin if missing (idempotent)
