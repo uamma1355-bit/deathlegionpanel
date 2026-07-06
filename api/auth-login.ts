@@ -14,19 +14,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ errors: [{ code: 'ValidationError', detail: 'user and password required' }] });
   }
 
-  // Use a Python script for proper string handling — bash quoting with JSON is fragile
+  const userJson = JSON.stringify(user);
+  const passJson = JSON.stringify(password);
+
+  // Python script that: logs in, deletes old API keys, creates a new one, returns token
   const pyScript = `import json, subprocess, tempfile, os
 
-user_val = ${JSON.stringify(user)}
-pass_val = ${JSON.stringify(password)}
-
+user_val = ${userJson}
+pass_val = ${passJson}
 cookie_file = tempfile.mktemp()
 
+# Step 0: Delete old "browser-session" API keys to avoid hitting the 25-key limit
+# We do this by logging in first, then deleting keys via the API
 # Step 1: Login
 login_result = subprocess.run([
     'curl', '-s', '-c', cookie_file,
-    '-H', 'Accept: application/json',
-    '-H', 'Content-Type: application/json',
+    '-H', 'Accept: application/json', '-H', 'Content-Type: application/json',
     '-X', 'POST',
     '-d', json.dumps({"user": user_val, "password": pass_val}),
     'http://127.0.0.1:8000/api/client/auth/login'
@@ -36,29 +39,49 @@ try:
     login_data = json.loads(login_result.stdout)
 except:
     print(json.dumps({"errors": [{"code": "LoginError", "detail": "Failed to parse login response"}]}))
-    os.unlink(cookie_file)
+    if os.path.exists(cookie_file): os.unlink(cookie_file)
     exit(0)
 
-# Check for 2FA
 if login_data.get('data', {}).get('complete') is False:
     token = login_data.get('data', {}).get('confirmation_token', '')
     print(json.dumps({"complete": False, "confirmation_token": token}))
-    os.unlink(cookie_file)
+    if os.path.exists(cookie_file): os.unlink(cookie_file)
     exit(0)
 
-# Check login success
 if not login_data.get('data', {}).get('complete'):
     print(json.dumps({"errors": [{"code": "LoginFailed", "detail": "Invalid credentials"}]}))
-    os.unlink(cookie_file)
+    if os.path.exists(cookie_file): os.unlink(cookie_file)
     exit(0)
 
 user_info = login_data.get('data', {}).get('user', {})
 
-# Step 2: Create API key
-key_result = subprocess.run([
+# Step 2: List existing API keys
+list_result = subprocess.run([
     'curl', '-s', '-b', cookie_file,
     '-H', 'Accept: application/json',
-    '-H', 'Content-Type: application/json',
+    'http://127.0.0.1:8000/api/client/account/api-keys'
+], capture_output=True, text=True)
+
+try:
+    list_data = json.loads(list_result.stdout)
+    old_keys = list_data.get('data', [])
+    # Delete old browser-session keys (keep others)
+    for key in old_keys:
+        ident = key.get('attributes', {}).get('identifier', '')
+        desc = key.get('attributes', {}).get('description', '')
+        if desc == 'browser-session' and ident:
+            subprocess.run([
+                'curl', '-s', '-b', cookie_file,
+                '-X', 'DELETE',
+                f'http://127.0.0.1:8000/api/client/account/api-keys/{ident}'
+            ], capture_output=True, text=True)
+except:
+    pass
+
+# Step 3: Create new API key
+key_result = subprocess.run([
+    'curl', '-s', '-b', cookie_file,
+    '-H', 'Accept: application/json', '-H', 'Content-Type: application/json',
     '-X', 'POST',
     '-d', json.dumps({"description": "browser-session", "allowed_ips": []}),
     'http://127.0.0.1:8000/api/client/account/api-keys'
@@ -73,9 +96,8 @@ identifier = key_data.get('attributes', {}).get('identifier', '')
 secret = key_data.get('meta', {}).get('secret_token', '')
 full_token = identifier + secret if identifier and secret else ''
 
-os.unlink(cookie_file)
+if os.path.exists(cookie_file): os.unlink(cookie_file)
 
-# Step 3: Return combined response
 print(json.dumps({
     "token": full_token,
     "user": user_info,

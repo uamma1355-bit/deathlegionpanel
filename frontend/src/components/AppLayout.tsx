@@ -125,7 +125,7 @@ export function AppLayout(): JSX.Element {
 
             {user?.admin && (
               <a
-                href="https://8000-210e4afe-d6d5-4cc1-b3d3-05f40077ea15.daytonaproxy01.eu/admin"
+                href="/admin"
                 target="_blank"
                 rel="noreferrer"
                 className="flex h-full cursor-pointer items-center px-6 text-neutral-300 transition-all duration-150 hover:bg-black hover:text-neutral-100"
