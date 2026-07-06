@@ -1,4 +1,4 @@
-import type { JsonApiResource, JsonApiList } from './api.js';
+import type { JsonApiResource } from './api.js';
 
 export interface AllocationAttributes {
   id: number;
@@ -69,7 +69,11 @@ export type ServerResponse = JsonApiResource<ServerAttributes> & {
   relationships?: ServerRelationships;
 };
 
-export type ServerListResponse = JsonApiList<ServerAttributes>;
+export type ServerListResponse = {
+  object: string;
+  data: JsonApiResource<ServerAttributes>[];
+  [key: string]: unknown;
+};
 
 export type AllocationResponse = JsonApiResource<AllocationAttributes>;
 

@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 
 import { getConfig } from '@/config/env';
 import { useAuth } from '@/auth/AuthProvider';
+import { PterodactylIcon } from '@/components/PterodactylLogo';
 
 export function AppLayout(): JSX.Element {
   const { t } = useTranslation();
@@ -26,10 +27,11 @@ export function AppLayout(): JSX.Element {
       {/* NavigationBar (verbatim structure from upstream) */}
       <div className="w-full overflow-x-auto bg-neutral-900 shadow-md">
         <div className="mx-auto flex h-14 w-full max-w-[1200px] items-center">
-          <div id="logo" className="flex-1">
+          <div id="logo" className="flex flex-1 items-center gap-2">
+            <PterodactylIcon className="h-7 w-7" />
             <Link
               to="/"
-              className="px-4 text-2xl font-header no-underline text-neutral-200 transition-colors duration-150 hover:text-neutral-100"
+              className="text-2xl font-header no-underline text-neutral-200 transition-colors duration-150 hover:text-neutral-100"
             >
               {getConfig().appName}
             </Link>
@@ -59,7 +61,8 @@ export function AppLayout(): JSX.Element {
             {/* Admin */}
             {user?.admin && (
               <a
-                href={`${getConfig().apiUrl}/admin`}
+                href="/admin"
+                target="_blank"
                 rel="noreferrer"
                 className="flex h-full cursor-pointer items-center px-6 no-underline text-neutral-300 transition-all duration-150 hover:bg-black hover:text-neutral-100"
                 title={t('nav.admin')}

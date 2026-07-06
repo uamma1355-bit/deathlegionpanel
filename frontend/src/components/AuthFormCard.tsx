@@ -9,6 +9,7 @@
  */
 
 import { type ReactNode } from 'react';
+import { PterodactylLogo } from '@/components/PterodactylLogo';
 
 export function AuthFormCard({
   title,
@@ -24,22 +25,7 @@ export function AuthFormCard({
       )}
       <div className="mx-1 flex w-full flex-col rounded-lg bg-white p-6 shadow-lg md:flex-row md:pl-0">
         <div className="mb-6 flex-none select-none self-center md:mb-0">
-          {/* Pterodactyl logo SVG — simplified geometric mark */}
-          <svg
-            viewBox="0 0 256 256"
-            className="mx-auto block w-48 md:w-64"
-            xmlns="http://www.w3.org/2000/svg"
-            aria-hidden
-          >
-            <circle cx="128" cy="128" r="120" fill="#0aa4cf" />
-            <path
-              d="M64 144 L104 104 L128 128 L168 88 L192 112 L152 152 L128 128 L88 168 Z"
-              fill="#ffffff"
-              stroke="#ffffff"
-              strokeWidth="4"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <PterodactylLogo className="mx-auto block w-48 md:w-64" />
         </div>
         <div className="flex-1">{children}</div>
       </div>
