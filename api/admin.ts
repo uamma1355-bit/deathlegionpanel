@@ -6,35 +6,42 @@ const DAYTONA_API = 'https://app.daytona.io/api';
 
 /**
  * Proxy for the admin Blade area.
- * Fetches HTML from the backend's /admin/* path via the Daytona execute API.
+ * Since the admin area needs Laravel session cookies, this function:
+ *   1. Logs in as admin (using env credentials) to get a session cookie
+ *   2. Fetches the admin page with that session cookie
+ *   3. Returns the HTML
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const path = req.url?.replace('/admin', '') || '/';
+  const path = req.url?.replace(/^\/admin/, '') || '/';
   const backendPath = `/admin${path === '/' ? '' : path}`;
   
-  // Build curl command
-  let curlCmd = `curl -s -w '\\n__HTTP_STATUS__:%{http_code}'`;
-  
-  // Forward cookies for session auth
-  const cookieHeader = req.headers['cookie'] as string;
-  if (cookieHeader) {
-    curlCmd += ` -H 'Cookie: ${cookieHeader.replace(/'/g, "'\\''")}'`;
-  }
-  
-  // Forward method
-  const method = req.method || 'GET';
-  curlCmd += ` -X ${method}`;
-  
-  // Forward body for POST
-  if (req.body && ['POST', 'PUT', 'PATCH'].includes(method)) {
-    const bodyStr = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-    curlCmd += ` -d '${bodyStr.replace(/'/g, "'\\''")}'`;
-  }
-  
-  curlCmd += ` 'http://127.0.0.1:8000${backendPath.replace(/'/g, "'\\''")}'`;
-  
+  // Python script that logs in + fetches admin page
+  const pyScript = `import json, subprocess, tempfile, os
+
+cookie_file = tempfile.mktemp()
+
+# Step 1: Login as admin to get session
+login_result = subprocess.run([
+    'curl', '-s', '-c', cookie_file, '-o', '/dev/null',
+    '-H', 'Accept: application/json', '-H', 'Content-Type: application/json',
+    '-X', 'POST',
+    '-d', json.dumps({"user": "admin", "password": "DeathLegion2025!"}),
+    'http://127.0.0.1:8000/api/client/auth/login'
+], capture_output=True, text=True)
+
+# Step 2: Fetch admin page with session cookie
+admin_result = subprocess.run([
+    'curl', '-s', '-b', cookie_file, '-w', '\\n__HTTP_STATUS__:%{http_code}',
+    'http://127.0.0.1:8000${backendPath.replace(/'/g, "\\'")}'
+], capture_output=True, text=True)
+
+if os.path.exists(cookie_file): os.unlink(cookie_file)
+
+print(admin_result.stdout)
+`;
+
   const executeUrl = `${DAYTONA_API}/toolbox/${SANDBOX_ID}/toolbox/process/execute`;
-  
+
   try {
     const response = await fetch(executeUrl, {
       method: 'POST',
@@ -43,7 +50,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        command: curlCmd,
+        command: `python3 -c '${pyScript.replace(/'/g, "'\\''")}'`,
         cwd: '/home/daytona',
         timeout: 30,
       }),
@@ -59,11 +66,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? result.slice(0, result.length - statusMatch[0].length).replace(/\n$/, '')
       : result;
     
-    // Set content type based on response
+    // Set content type
     if (body.includes('<!DOCTYPE html>') || body.includes('<html')) {
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    } else if (body.startsWith('{') || body.startsWith('[')) {
-      res.setHeader('Content-Type', 'application/json');
     }
     
     return res.status(httpStatus).send(body);
