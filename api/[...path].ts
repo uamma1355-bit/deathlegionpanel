@@ -5,36 +5,56 @@ const SANDBOX_ID = '210e4afe-d6d5-4cc1-b3d3-05f40077ea15';
 const DAYTONA_API = 'https://app.daytona.io/api';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const path = Array.isArray(req.query.path) ? req.query.path.join('/') : req.query.path;
+  // Build the backend path from the Vercel route params
+  const pathParts = Array.isArray(req.query.path) ? req.query.path : [req.query.path];
+  const path = pathParts.filter(Boolean).join('/');
   const backendPath = `/api/${path}`;
+
+  // Get method, headers, body
+  const method = (req.method || 'GET').toUpperCase();
+  const authHeader = (req.headers['authorization'] as string) || '';
+  const contentType = (req.headers['content-type'] as string) || 'application/json';
   
-  // Build the target URL — use the Daytona toolbox execute API to run a curl command
-  // that hits the local backend. This bypasses the preview URL auth wall.
-  const targetUrl = `${DAYTONA_API}/toolbox/${SANDBOX_ID}/toolbox/process/execute`;
-  
-  // Build the curl command to run inside the sandbox
-  const method = req.method || 'GET';
-  const headers = JSON.stringify(req.headers);
-  const body = req.body ? JSON.stringify(req.body) : '';
-  
-  // For GET requests, just forward the URL
-  // For POST/PUT/DELETE, forward the body
-  let curlCmd: string;
-  if (method === 'GET' || method === 'HEAD') {
-    curlCmd = `curl -s -X ${method} -H 'Accept: application/json' -H 'Content-Type: application/json' http://127.0.0.1:8000${backendPath}`;
-  } else {
-    const escapedBody = body.replace(/'/g, "'\\''");
-    curlCmd = `curl -s -X ${method} -H 'Accept: application/json' -H 'Content-Type: application/json' -d '${escapedBody}' http://127.0.0.1:8000${backendPath}`;
+  // Parse body
+  let bodyStr = '';
+  if (req.body && typeof req.body === 'object') {
+    bodyStr = JSON.stringify(req.body);
+  } else if (typeof req.body === 'string') {
+    bodyStr = req.body;
   }
-  
-  // Forward auth header if present
-  const authHeader = req.headers['authorization'];
+
+  // Build curl command to run inside the sandbox
+  // The curl hits the local backend at 127.0.0.1:8000
+  const escapedPath = backendPath.replace(/'/g, "'\\''");
+  let curlParts = [
+    'curl',
+    '-s',
+    '-w', "'\\n__HTTP_STATUS__:%{http_code}'",
+    '-X', method,
+    '-H', "'Accept: application/json'",
+    '-H', `'Content-Type: ${contentType}'`,
+  ];
+
+  // Forward auth header if present (for bearer token auth)
   if (authHeader) {
-    curlCmd += ` -H 'Authorization: ${authHeader}'`;
+    curlParts.push('-H', `'Authorization: ${authHeader.replace(/'/g, "'\\''")}'`);
   }
+
+  // Forward body for POST/PUT/PATCH
+  if (bodyStr && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const escapedBody = bodyStr.replace(/'/g, "'\\''");
+    curlParts.push('-d', `'${escapedBody}'`);
+  }
+
+  curlParts.push(`'http://127.0.0.1:8000${escapedPath}'`);
+
+  const curlCmd = curlParts.join(' ');
+
+  // Execute via Daytona API
+  const executeUrl = `${DAYTONA_API}/toolbox/${SANDBOX_ID}/toolbox/process/execute`;
   
   try {
-    const response = await fetch(targetUrl, {
+    const response = await fetch(executeUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${DAYTONA_TOKEN}`,
@@ -46,20 +66,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         timeout: 30,
       }),
     });
-    
+
+    if (!response.ok) {
+      const errText = await response.text();
+      return res.status(502).json({
+        errors: [{
+          code: 'ProxyError',
+          status: '502',
+          detail: `Daytona API error: ${response.status} ${errText.slice(0, 200)}`,
+        }],
+      });
+    }
+
     const data = await response.json();
-    const result = data.result || '';
-    const exitCode = data.exitCode || 0;
-    
-    // Try to parse the result as JSON
+    const result: string = data.result || '';
+    const exitCode: number = data.exitCode || 0;
+
+    // Extract HTTP status code from the curl output
+    // Format: <response body>\n__HTTP_STATUS__:<code>
+    const statusMatch = result.match(/__HTTP_STATUS__:(\d+)$/);
+    const httpStatus = statusMatch ? parseInt(statusMatch[1], 10) : 200;
+    const responseBody = statusMatch 
+      ? result.slice(0, result.length - statusMatch[0].length).replace(/\n$/, '')
+      : result;
+
+    // Try to parse as JSON
     try {
-      const parsed = JSON.parse(result);
-      res.status(200).json(parsed);
+      const parsed = JSON.parse(responseBody);
+      return res.status(httpStatus).json(parsed);
     } catch {
-      // If not JSON, return as text
-      res.status(500).json({ error: 'Backend returned non-JSON', result, exitCode });
+      // Not JSON — return as text
+      return res.status(httpStatus).send(responseBody);
     }
   } catch (err) {
-    res.status(500).json({ error: 'Proxy failed', detail: String(err) });
+    return res.status(500).json({
+      errors: [{
+        code: 'ProxyError',
+        status: '500',
+        detail: `Proxy failed: ${err instanceof Error ? err.message : String(err)}`,
+      }],
+    });
   }
 }

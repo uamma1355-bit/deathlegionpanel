@@ -36,9 +36,41 @@ export interface LoginResponse {
   user?: LoginUser;
 }
 
-export async function login(payload: LoginRequest): Promise<LoginResponse> {
+export async function login(payload: LoginRequest): Promise<LoginResponse & { token?: string }> {
+  // The /api/client/auth/login endpoint is handled by a Vercel serverless function
+  // that does login + API key creation in one shot, returning {token, user, complete}.
+  // This avoids the need for cookies (which don't work through the Daytona proxy).
   const res = await http.post<unknown>('/api/client/auth/login', payload);
-  return normalizeLoginResponse(res.data);
+  const data = res.data as {
+    complete?: boolean;
+    confirmation_token?: string;
+    token?: string;
+    user?: LoginUser;
+    data?: { complete?: boolean; confirmation_token?: string; user?: LoginUser };
+    errors?: { code?: string; detail?: string }[];
+  };
+  
+  // Error response
+  if (data.errors) {
+    throw data;
+  }
+  
+  // 2FA challenge
+  if (data.complete === false && data.confirmation_token) {
+    return { complete: false, confirmation_token: data.confirmation_token };
+  }
+  
+  // Success with token (from the serverless function)
+  if (data.token && data.user) {
+    return {
+      complete: true,
+      user: data.user,
+      token: data.token,
+    };
+  }
+  
+  // Fallback: try the old response format
+  return normalizeLoginResponse(data);
 }
 
 export interface LoginCheckpointRequest {

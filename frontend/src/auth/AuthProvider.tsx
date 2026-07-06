@@ -97,8 +97,9 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     async (req: LoginRequest): Promise<void> => {
       setError(null);
       try {
-        // Step 1: Login with cookies (CSRF + session)
+        // Login — the serverless function returns {token, user, complete} in one shot
         const resp = await apiLogin(req);
+        
         if (!resp.complete) {
           // 2FA challenge — re-throw for the page to handle
           if (resp.confirmation_token) {
@@ -112,26 +113,21 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
           throw new Error('Login did not complete');
         }
 
-        // Step 2: Use the user object from the login response immediately
+        // Use the user object from the login response immediately
         if (resp.user) {
           setUser(loginUserToAttributes(resp.user));
         }
 
-        // Step 3: Create an API key for token-based auth (avoids cross-site cookie issues)
-        try {
-          const apiKey = await createApiKey('browser-session');
-          setStoredToken(apiKey);
-          // Store the identifier (first 16 chars, e.g. "ptlc_AhV8dFZtWXN") for deletion at logout
-          if (typeof window !== 'undefined' && apiKey.startsWith('ptlc_')) {
-            window.localStorage.setItem(API_KEY_IDENTIFIER_STORAGE_KEY, apiKey.substring(0, 16));
+        // The serverless function already created an API key — store it
+        if (resp.token) {
+          setStoredToken(resp.token);
+          if (typeof window !== 'undefined' && resp.token.startsWith('ptlc_')) {
+            window.localStorage.setItem(API_KEY_IDENTIFIER_STORAGE_KEY, resp.token.substring(0, 16));
           }
-          // Refresh to get the canonical user shape (with id)
-          void refresh();
-        } catch (err) {
-          // If API key creation fails, fall back to cookie mode
-          console.warn('API key creation failed, using cookie mode', err);
-          void refresh();
         }
+        
+        // Refresh to get the canonical user shape (with id)
+        void refresh();
       } catch (err) {
         if ((err as { type?: string }).type === 'two-factor-required') {
           throw err as TwoFactorRequiredError;
