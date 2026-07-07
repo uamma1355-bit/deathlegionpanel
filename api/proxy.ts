@@ -47,7 +47,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     'Accept': req.headers['accept'] || '*/*',
     'Accept-Encoding': 'identity',
     'Accept-Language': req.headers['accept-language'] || '',
-    'User-Agent': req.headers['user-agent'] || 'VercelProxy/1.0',
+    // Use a non-browser User-Agent to bypass Daytona's "Preview URL Warning" interstitial.
+    // Daytona shows an interstitial for browser-like User-Agents on preview URLs.
+    'User-Agent': 'VercelProxy/1.0 (Serverless; +https://vercel.com)',
     'X-Forwarded-For': (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '',
     'X-Forwarded-Proto': 'https',
     'X-Forwarded-Host': vercelHost,
