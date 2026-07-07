@@ -17,47 +17,75 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const userJson = JSON.stringify(user);
   const passJson = JSON.stringify(password);
 
-  // Simple script: login → create API key → return token
-  // NO key deletion — the limit is now 1000
+  // Python script for the full Pterodactyl login flow:
+  // 1. GET /sanctum/csrf-cookie → get XSRF token
+  // 2. POST /auth/login with XSRF token → login (sets session)
+  // 3. POST /api/client/account/api-keys with session → create API key
   const pyScript = `import json, subprocess, tempfile, os
 
 user_val = ${userJson}
 pass_val = ${passJson}
 cookie_file = tempfile.mktemp()
 
-# Login
+# Step 1: Get CSRF cookie
+subprocess.run([
+    'curl', '-s', '-c', cookie_file, '-o', '/dev/null',
+    'http://127.0.0.1:8000/sanctum/csrf-cookie'
+], capture_output=True, text=True)
+
+# Read XSRF token from cookie file
+xsrf_token = ''
+try:
+    with open(cookie_file, 'r') as f:
+        for line in f:
+            if 'XSRF-TOKEN' in line:
+                xsrf_token = line.strip().split('\\t')[-1]
+                # URL decode it
+                from urllib.parse import unquote
+                xsrf_token = unquote(xsrf_token)
+                break
+except:
+    pass
+
+# Step 2: Login via web route (/auth/login)
 login_result = subprocess.run([
-    'curl', '-s', '-c', cookie_file,
-    '-H', 'Accept: application/json', '-H', 'Content-Type: application/json',
+    'curl', '-s', '-c', cookie_file, '-b', cookie_file,
+    '-H', 'Accept: application/json',
+    '-H', 'Content-Type: application/json',
+    '-H', f'X-XSRF-TOKEN: {xsrf_token}',
     '-X', 'POST',
     '-d', json.dumps({"user": user_val, "password": pass_val}),
-    'http://127.0.0.1:8000/api/client/auth/login'
+    'http://127.0.0.1:8000/auth/login'
 ], capture_output=True, text=True)
 
 try:
     login_data = json.loads(login_result.stdout)
 except:
-    print(json.dumps({"errors": [{"code": "LoginError", "detail": "Failed to parse login response"}]}))
+    print(json.dumps({"errors": [{"code": "LoginError", "detail": "Failed to parse login response: " + login_result.stdout[:200]}]}))
     if os.path.exists(cookie_file): os.unlink(cookie_file)
     exit(0)
 
+# Check for 2FA
 if login_data.get('data', {}).get('complete') is False:
     token = login_data.get('data', {}).get('confirmation_token', '')
     print(json.dumps({"complete": False, "confirmation_token": token}))
     if os.path.exists(cookie_file): os.unlink(cookie_file)
     exit(0)
 
+# Check login success
 if not login_data.get('data', {}).get('complete'):
-    print(json.dumps({"errors": [{"code": "LoginFailed", "detail": "Invalid credentials"}]}))
+    detail = login_data.get('errors', [{}])[0].get('detail', 'Invalid credentials') if login_data.get('errors') else 'Invalid credentials'
+    print(json.dumps({"errors": [{"code": "LoginFailed", "detail": detail}]}))
     if os.path.exists(cookie_file): os.unlink(cookie_file)
     exit(0)
 
 user_info = login_data.get('data', {}).get('user', {})
 
-# Create API key (no deletion — limit is 1000)
+# Step 3: Create API key
 key_result = subprocess.run([
     'curl', '-s', '-b', cookie_file,
     '-H', 'Accept: application/json', '-H', 'Content-Type: application/json',
+    '-H', f'X-XSRF-TOKEN: {xsrf_token}',
     '-X', 'POST',
     '-d', json.dumps({"description": "browser-session", "allowed_ips": []}),
     'http://127.0.0.1:8000/api/client/account/api-keys'
