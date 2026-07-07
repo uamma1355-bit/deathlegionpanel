@@ -153,10 +153,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   if (req.headers['cookie']) forwardHeaders['Cookie'] = req.headers['cookie'] as string;
 
-  // Build request body
+  // Build request body — bodyParser is disabled, so read raw stream for all body methods
   let body: Buffer | undefined;
-  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && req.body) {
-    body = Buffer.isBuffer(req.body) ? req.body : Buffer.from(typeof req.body === 'string' ? req.body : JSON.stringify(req.body));
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    if (chunks.length > 0) {
+      body = Buffer.concat(chunks);
+      forwardHeaders['Content-Length'] = body.length.toString();
+    }
   }
 
   try {
@@ -273,3 +280,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 }
+
+// Disable Vercel body parsing so multipart file uploads work
+export const config = {
+  api: {
+    bodyParser: false,
+    sizeLimit: '50mb',
+  },
+  maxDuration: 300,
+};

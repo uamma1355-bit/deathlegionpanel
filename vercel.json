@@ -6,6 +6,12 @@
     { "source": "/api/proxy", "destination": "/api/proxy" },
     { "source": "/(.*)", "destination": "/api/proxy" }
   ],
+  "functions": {
+    "api/proxy.ts": {
+      "maxDuration": 300,
+      "memory": 1024
+    }
+  },
   "headers": [
     {
       "source": "/(.*)",
