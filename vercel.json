@@ -3,19 +3,24 @@
   "public": true,
   "rewrites": [
     { "source": "/api/health", "destination": "/api/health" },
-    { "source": "/api/:path*", "destination": "/api/[...path]" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/api/servers/:uuid/ws", "destination": "/api/proxy" },
+    { "source": "/api/:path*", "destination": "/api/proxy" },
+    { "source": "/auth/:path*", "destination": "/api/proxy" },
+    { "source": "/assets/:path*", "destination": "/api/proxy" },
+    { "source": "/favicons/:path*", "destination": "/api/proxy" },
+    { "source": "/sanctum/:path*", "destination": "/api/proxy" },
+    { "source": "/server/:path*", "destination": "/api/proxy" },
+    { "source": "/admin/:path*", "destination": "/api/proxy" },
+    { "source": "/dashboard", "destination": "/api/proxy" },
+    { "source": "/account", "destination": "/api/proxy" },
+    { "source": "/(.*\\..*)", "destination": "/api/proxy" }
   ],
   "headers": [
     {
-      "source": "/index.html",
-      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
-    },
-    {
-      "source": "/api/health",
+      "source": "/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
-        { "key": "Access-Control-Allow-Origin", "value": "*" }
+        { "key": "X-Frame-Options", "value": "ALLOWALL" },
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
       ]
     }
   ]
