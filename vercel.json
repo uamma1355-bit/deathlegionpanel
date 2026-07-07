@@ -2,8 +2,12 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "public": true,
   "rewrites": [
+    { "source": "/api/health", "destination": "/api/health" },
+    { "source": "/api/apply", "destination": "/api/apply" },
+    { "source": "/api/apply-page", "destination": "/api/apply-page" },
+    { "source": "/api/proxy", "destination": "/api/proxy" },
     { "source": "/apply", "destination": "/api/apply-page" },
-    { "source": "/((?!api/).*)", "destination": "/api/proxy" }
+    { "source": "/(.*)", "destination": "/api/proxy" }
   ],
   "headers": [
     {
