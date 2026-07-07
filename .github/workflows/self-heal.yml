@@ -1,40 +1,31 @@
-# Self-healing system — runs every 5 minutes.
-# Checks if the Daytona backend sandbox is alive. If dead, recreates it,
-# restores MySQL from the latest GitHub backup, and updates Vercel env.
+# Unified Self-Heal — keeps the single Pterodactyl panel on Daytona healthy.
+# No more Vercel split. The panel is served directly from the Daytona sandbox
+# via its public URL.
 #
-# MySQL data is backed up to backups/latest.sql.gz.b64 in this repo every
-# cycle when the backend is alive. When the sandbox expires and a new one
-# is created, the latest backup is imported — zero data loss.
+# Required GitHub repo secrets:
+#   DAYTONA_TOKEN  - Daytona API token
 #
-# Required GitHub repo secrets (Settings → Secrets and variables → Actions):
-#   DAYTONA_TOKEN       - Daytona API token
-#   GH_TOKEN            - GitHub PAT with repo write access (for backup commits + env vars)
-#   VERCEL_TOKEN        - Vercel token
-#   VERCEL_PROJECT_ID   - Vercel project ID (find in project settings)
-#   VERCEL_ORG_ID       - Vercel team ID
-#   MYSQL_ROOT_PW       - MySQL root password (must be SAME across sandbox recreations)
-#   MYSQL_APP_PW        - MySQL app password (must be SAME)
-#   ADMIN_EMAIL         - Admin email
-#   ADMIN_USERNAME      - Admin username
-#   ADMIN_PASSWORD      - Admin password
-#
-# Also set these as repository variables (Settings → Secrets and variables → Actions → Variables):
-#   GH_REPO             - owner/repo (e.g. deathlegion/deathlegionpanel)
+# Optional (only used if sandbox needs full rebuild):
+#   GH_TOKEN       - GitHub PAT (for MySQL backup commits)
+#   MYSQL_ROOT_PW  - MySQL root password
+#   MYSQL_APP_PW   - MySQL app password
+#   ADMIN_USERNAME - Admin username (default: admin)
+#   ADMIN_PASSWORD - Admin password
 
 name: Self-Heal
 
 on:
   schedule:
-    # Every 5 minutes (free for public repos, 2000 min/month for private)
+    # Every 5 minutes
     - cron: "*/5 * * * *"
   workflow_dispatch:
 
 jobs:
   selfheal:
-    name: Check + heal backend
+    name: Keep unified panel healthy
     runs-on: ubuntu-latest
     if: github.repository != 'pterodactyl/panel'
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -43,24 +34,12 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Run self-heal
+      - name: Run unified self-heal
         env:
           DAYTONA_TOKEN: ${{ secrets.DAYTONA_TOKEN }}
-          DAYTONA_SANDBOX_NAME: pterodactyl-backend
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          GH_REPO: ${{ vars.GH_REPO }}
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          MYSQL_ROOT_PW: ${{ secrets.MYSQL_ROOT_PW }}
-          MYSQL_APP_PW: ${{ secrets.MYSQL_APP_PW }}
-          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         run: |
-          python3 scripts/daytona-selfheal.py 2>&1 | tee selfheal.log
-          # Extract just the result for the step summary
-          echo "## Self-Heal Result" >> "$GITHUB_STEP_SUMMARY"
+          python3 scripts/selfheal_unified.py 2>&1 | tee selfheal.log
+          echo "## Unified Panel Self-Heal" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          cat selfheal.log | tail -20 >> "$GITHUB_STEP_SUMMARY"
+          cat selfheal.log >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
