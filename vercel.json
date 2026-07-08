@@ -5,10 +5,13 @@
     { "source": "/api/health", "destination": "/api/health" },
     { "source": "/api/apply", "destination": "/api/apply" },
     { "source": "/api/apply-page", "destination": "/api/apply-page" },
+    { "source": "/api/admin-approve", "destination": "/api/admin-approve" },
+    { "source": "/api/applications-page", "destination": "/api/applications-page" },
     { "source": "/api/status-page", "destination": "/api/status-page" },
     { "source": "/api/proxy", "destination": "/api/proxy" },
     { "source": "/apply", "destination": "/api/apply-page" },
     { "source": "/status", "destination": "/api/status-page" },
+    { "source": "/admin/applications", "destination": "/api/applications-page" },
     { "source": "/(.*)", "destination": "/api/proxy" }
   ],
   "headers": [
