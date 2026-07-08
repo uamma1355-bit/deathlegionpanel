@@ -5,8 +5,10 @@
     { "source": "/api/health", "destination": "/api/health" },
     { "source": "/api/apply", "destination": "/api/apply" },
     { "source": "/api/apply-page", "destination": "/api/apply-page" },
+    { "source": "/api/status-page", "destination": "/api/status-page" },
     { "source": "/api/proxy", "destination": "/api/proxy" },
     { "source": "/apply", "destination": "/api/apply-page" },
+    { "source": "/status", "destination": "/api/status-page" },
     { "source": "/(.*)", "destination": "/api/proxy" }
   ],
   "headers": [

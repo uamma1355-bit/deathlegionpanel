@@ -127,6 +127,21 @@ const APPLY_PAGE_HTML = `<!DOCTYPE html>
     .progress-step .dot { width: 8px; height: 8px; border-radius: 50%; background: #333; }
     .progress-step.active .dot { background: #e89060; animation: pulse 1s ease-in-out infinite; }
     .progress-step.done .dot { background: #22c55e; }
+    .heavy-load {
+      display: none;
+      text-align: center;
+      padding: 2rem;
+    }
+    .heavy-load .icon { font-size: 3rem; margin-bottom: 1rem; }
+    .heavy-load h2 { font-family: 'Cinzel', serif; color: #f59e0b; font-size: 1.5rem; margin-bottom: 0.5rem; }
+    .heavy-load p { color: #aaa; margin-bottom: 1rem; line-height: 1.6; }
+    .heavy-load .retry-btn {
+      display: inline-block; padding: 0.75rem 2rem;
+      background: linear-gradient(135deg, #bc6e3c 0%, #d97f4a 100%);
+      border: none; border-radius: 8px; color: #fff;
+      text-decoration: none; font-weight: 600; cursor: pointer;
+      font-family: 'Inter', sans-serif; font-size: 1rem;
+    }
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
   </style>
 </head>
@@ -165,6 +180,13 @@ const APPLY_PAGE_HTML = `<!DOCTYPE html>
       <div class="credentials" id="credentials"></div>
       <a href="/" class="login-link">Go to Panel Login</a>
     </div>
+    <div class="card heavy-load" id="heavyLoadCard">
+      <div class="icon">&#9888;</div>
+      <h2>We're Under Heavy Load</h2>
+      <p>Our servers are experiencing high traffic right now.<br>Your request is being queued. Please wait a moment...</p>
+      <div class="spinner" style="width:24px;height:24px;border-width:3px;margin:0 auto 1rem;display:block"></div>
+      <p style="font-size:0.85rem;color:#666" id="loadCountdown">Retrying in 10 seconds...</p>
+    </div>
   </div>
   <script>
     const form = document.getElementById('applyForm');
@@ -187,6 +209,30 @@ const APPLY_PAGE_HTML = `<!DOCTYPE html>
       const stepTimer = setInterval(() => { for(let i=0;i<steps.length;i++){ if(steps[i].classList.contains('active')){ if(i<steps.length-1) setStep(i+1); break; } } }, 2000);
       try {
         const resp = await fetch('/api/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+        
+        // Handle heavy load (503, 429, or timeout)
+        if (resp.status === 503 || resp.status === 429 || resp.status === 504) {
+          clearInterval(stepTimer);
+          progress.style.display = 'none';
+          applyCard.style.display = 'none';
+          document.getElementById('heavyLoadCard').style.display = 'block';
+          
+          // Countdown + auto-retry
+          let cd = 10;
+          const cdEl = document.getElementById('loadCountdown');
+          const cdTimer = setInterval(() => {
+            cd--;
+            if (cd <= 0) {
+              clearInterval(cdTimer);
+              cdEl.textContent = 'Retrying now...';
+              setTimeout(() => window.location.reload(), 500);
+            } else {
+              cdEl.textContent = 'Retrying in ' + cd + ' seconds...';
+            }
+          }, 1000);
+          return;
+        }
+        
         const result = await resp.json();
         clearInterval(stepTimer);
         steps.forEach(s => { s.classList.remove('active'); s.classList.add('done'); });
@@ -200,10 +246,21 @@ const APPLY_PAGE_HTML = `<!DOCTYPE html>
       } catch (err) {
         clearInterval(stepTimer);
         progress.style.display = 'none';
-        errorBox.textContent = err.message;
-        errorBox.style.display = 'block';
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Apply Now';
+        // Network error or timeout - show heavy load
+        applyCard.style.display = 'none';
+        document.getElementById('heavyLoadCard').style.display = 'block';
+        let cd = 10;
+        const cdEl = document.getElementById('loadCountdown');
+        const cdTimer = setInterval(() => {
+          cd--;
+          if (cd <= 0) {
+            clearInterval(cdTimer);
+            cdEl.textContent = 'Retrying now...';
+            setTimeout(() => window.location.reload(), 500);
+          } else {
+            cdEl.textContent = 'Retrying in ' + cd + ' seconds...';
+          }
+        }, 1000);
       }
     });
   </script>
