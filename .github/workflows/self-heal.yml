@@ -7,7 +7,7 @@ on:
 
 jobs:
   selfheal:
-    name: Heal all sandboxes
+    name: Heal cluster (5 Daytona + 5 E2B)
     runs-on: ubuntu-latest
     if: github.repository != 'pterodactyl/panel'
     timeout-minutes: 15
@@ -27,13 +27,13 @@ jobs:
       - name: Install E2B SDK
         run: npm install e2b
 
-      - name: Run unified self-heal
+      - name: Run cluster manager + self-heal
         env:
           DAYTONA_TOKEN: ${{ secrets.DAYTONA_TOKEN }}
           E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
         run: |
-          python3 scripts/selfheal_unified.py 2>&1 | tee selfheal.log
-          echo "## Self-Heal Result" >> "$GITHUB_STEP_SUMMARY"
+          python3 scripts/cluster_manager.py 2>&1 | tee selfheal.log
+          echo "## Cluster Self-Heal Report" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          tail -20 selfheal.log >> "$GITHUB_STEP_SUMMARY"
+          tail -30 selfheal.log >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
