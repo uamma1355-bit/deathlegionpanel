@@ -1,6 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "public": true,
   "rewrites": [
     { "source": "/api/health", "destination": "/api/health" },
     { "source": "/api/apply", "destination": "/api/apply" },
