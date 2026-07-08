@@ -174,11 +174,11 @@ const APPLY_PAGE_HTML = `<!DOCTYPE html>
       </form>
     </div>
     <div class="card success" id="successCard">
-      <div class="check">&#9203;</div>
-      <h2>Application Submitted!</h2>
-      <p>Your application is now pending admin approval. You'll receive access once an admin reviews your request (usually within 24 hours).</p>
+      <div class="check">&#10003;</div>
+      <h2>Welcome to Death Legion!</h2>
+      <p>Your account is ready! 2 bot servers have been created for you. You can login now.</p>
       <div class="credentials" id="credentials"></div>
-      <a href="/" class="login-link">Back to Panel</a>
+      <a href="/" class="login-link">Go to Panel Login</a>
     </div>
     <div class="card heavy-load" id="heavyLoadCard">
       <div class="icon">&#9888;</div>
@@ -240,7 +240,7 @@ const APPLY_PAGE_HTML = `<!DOCTYPE html>
           setTimeout(() => {
             applyCard.style.display = 'none';
             successCard.style.display = 'block';
-            credentials.innerHTML = '<div><span>Username:</span><span>'+result.user.username+'</span></div><div><span>Status:</span><span>Pending Approval</span></div><div><span>Est. wait:</span><span>~24 hours</span></div>';
+            credentials.innerHTML = '<div><span>Username:</span><span>'+result.user.username+'</span></div><div><span>Password:</span><span>'+result.login.password+'</span></div><div><span>Servers:</span><span>'+result.servers.length+' bots created</span></div><div><span>Status:</span><span style="color:#22c55e">Ready to login!</span></div>';
           }, 500);
         } else { throw new Error(result.error || 'Failed'); }
       } catch (err) {
