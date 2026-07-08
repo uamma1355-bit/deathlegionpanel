@@ -181,86 +181,9 @@ $creationService = app(ServerCreationService::class);
 $serverNames = [$input['username'] . ' Bot 1', $input['username'] . ' Bot 2'];
 $servers = [];
 
-// Comprehensive package.json with ALL baileys bot dependencies
-$pkgJson = json_encode([
-    'name' => 'deathlegion-bot',
-    'version' => '1.0.0',
-    'main' => 'index.js',
-    'scripts' => ['start' => 'node index.js'],
-    'dependencies' => [
-        '@whiskeysockets/baileys' => '^7.0.0',
-        'qrcode-terminal' => '^0.12.0',
-        'pino' => '^8.17.0',
-        'pino-pretty' => '^13.0.0',
-        '@hapi/boom' => '^10.0.1',
-        'axios' => '^1.8.0',
-        'express' => '^4.22.0',
-        'dotenv' => '^16.4.5',
-        'cheerio' => '^1.2.0',
-        'file-type' => '^19.6.0',
-        'fluent-ffmpeg' => '^2.1.3',
-        'ffmpeg-static' => '^5.2.0',
-        '@ffmpeg-installer/ffmpeg' => '^1.1.0',
-        'jimp' => '^1.6.1',
-        'node-fetch' => '^2.7.0',
-        'qrcode' => '^1.5.1',
-        'wa-sticker-formatter' => '^4.4.4',
-        'yt-search' => '^2.10.4',
-        '@distube/ytdl-core' => '^4.16.0',
-        'crypto-js' => '^4.2.0',
-        'chalk' => '^4.1.2',
-        '@adiwajshing/keyed-db' => '^0.2.4',
-        'awesome-phonenumber' => '^7.4.0',
-        '@vitalets/google-translate-api' => '^9.2.0',
-        'sqlite3' => '^5.1.6',
-        'adm-zip' => '^0.5.16',
-        'body-parser' => '^1.20.3',
-        'google-it' => '^1.6.0',
-        'moment-timezone' => '^0.5.46',
-        'node-cron' => '^3.0.3',
-        'sharp' => '^0.33.0',
-        'link-preview-js' => '^3.0.0',
-        'form-data' => '^4.0.0',
-    ],
-], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-
-// Asitha MD compatible bot template
-$indexJs = <<<'BOT'
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
-const { Boom } = require('@hapi/boom');
-const P = require('pino');
-const qrcode = require('qrcode-terminal');
-const axios = require('axios');
-const chalk = require('chalk');
-
-const logger = P({ level: 'silent' });
-
-async function startBot() {
-    console.log(chalk.green('Death Legion Bot Starting...'));
-    const { state, saveCreds } = await useMultiFileAuthState('auth');
-    const sock = makeWASocket({ auth: state, logger: logger, printQRInTerminal: false, browser: ['DeathLegion', 'Chrome', '1.0.0'] });
-    sock.ev.on('creds.update', saveCreds);
-    sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect, qr } = update;
-        if (qr) { console.log(chalk.yellow('QR Code:')); qrcode.generate(qr, { small: true }); }
-        if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect?.error instanceof Boom) ? lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut : true;
-            if (shouldReconnect) startBot();
-        } else if (connection === 'open') {
-            console.log(chalk.green('Bot Connected! All modules loaded!'));
-        }
-    });
-    sock.ev.on('messages.upsert', async (m) => {
-        const msg = m.messages[0];
-        if (!msg.key.fromMe && m.type === 'notify') {
-            const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
-            if (text === '!ping') await sock.sendMessage(msg.key.remoteJid, { text: 'Pong! Bot alive!' });
-            if (text === '!menu') await sock.sendMessage(msg.key.remoteJid, { text: 'Death Legion Bot Menu' });
-        }
-    });
-}
-startBot().catch(err => console.error(err));
-BOT;
+// Minimal placeholder - users upload their own package.json + bot code
+// The egg auto-detects the main file from package.json on server start
+$indexJs = '// Death Legion Panel - Placeholder\\n// Upload your bot files (index.js, package.json, etc.) via the Files tab\\n// The system will auto-detect your main file from package.json\\n// and run npm install automatically on server start.\\nconsole.log("Upload your bot files to get started!");\\nconsole.log("1. Go to Files tab");\\nconsole.log("2. Upload your bot code (index.js, package.json, etc.)");\\nconsole.log("3. Click Start to run your bot");\\nconsole.log("The system will auto-detect your main file and install dependencies.");\\n';
 
 foreach ($serverNames as $i => $name) {
     if (!isset($allocs[$i])) break;
@@ -284,12 +207,11 @@ foreach ($serverNames as $i => $name) {
 
         $volPath = '/var/lib/pterodactyl/volumes/' . $server->uuid;
         @mkdir($volPath, 0755, true);
+        // Install ONLY placeholder index.js - NO package.json
+        // Users upload their own package.json with their bot code
         file_put_contents($volPath . '/index.js', $indexJs);
-        file_put_contents($volPath . '/package.json', $pkgJson);
         chown($volPath . '/index.js', 'pterodactyl');
         chgrp($volPath . '/index.js', 'pterodactyl');
-        chown($volPath . '/package.json', 'pterodactyl');
-        chgrp($volPath . '/package.json', 'pterodactyl');
 
         echo "SERVER_CREATED:" . $server->id . ":" . $server->uuid . ":" . $server->name . "\\n";
         $servers[] = $server->uuid;
