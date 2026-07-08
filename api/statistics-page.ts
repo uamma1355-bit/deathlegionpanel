@@ -110,19 +110,29 @@ CPU_US=$(echo "$CPU_LINE" | awk '{print $2}' | cut -d% -f1)
 CPU_SY=$(echo "$CPU_LINE" | awk '{print $4}' | cut -d% -f1)
 CPU_IDLE=$(echo "$CPU_LINE" | awk '{print $8}' | cut -d% -f1)
 CPU_USE=$(awk "BEGIN{print 100-$CPU_IDLE}" 2>/dev/null)
-CORES=$(nproc 2>/dev/null || echo 1)
+# Get sandbox's actual CPU quota from cgroup (not host's nproc which shows all 48 cores)
+CPU_MAX=$(cat /sys/fs/cgroup/cpu.max 2>/dev/null || echo "max 100000")
+if [ "$CPU_MAX" = "max" ]; then
+  CORES=$(nproc 2>/dev/null || echo 1)
+else
+  QUOTA=$(echo "$CPU_MAX" | awk '{print $1}')
+  PERIOD=$(echo "$CPU_MAX" | awk '{print $2}')
+  CORES=$(awk "BEGIN{if ($PERIOD > 0) print int(($QUOTA / $PERIOD) + 0.5); else print 1}")
+  if [ "$CORES" = "0" ]; then CORES=1; fi
+fi
 LOAD=$(cat /proc/loadavg 2>/dev/null)
 LOAD1=$(echo "$LOAD" | awk '{print $1}')
 LOAD5=$(echo "$LOAD" | awk '{print $2}')
 LOAD15=$(echo "$LOAD" | awk '{print $3}')
-RAM=$(free -m 2>/dev/null | grep Mem)
-RAM_T=$(echo "$RAM" | awk '{print $2}')
-RAM_U=$(echo "$RAM" | awk '{print $3}')
-RAM_F=$(echo "$RAM" | awk '{print $4}')
-RAM_C=$(echo "$RAM" | awk '{print $6}')
-SWAP=$(free -m 2>/dev/null | grep Swap)
-SWAP_T=$(echo "$SWAP" | awk '{print $2}')
-SWAP_U=$(echo "$SWAP" | awk '{print $3}')
+# Use cgroup memory limits (sandbox's actual allocation), not host free -m
+CG_LIMIT=$(cat /sys/fs/cgroup/memory.max 2>/dev/null || cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null || echo 0)
+CG_USE=$(cat /sys/fs/cgroup/memory.current 2>/dev/null || cat /sys/fs/cgroup/memory/memory.usage_in_bytes 2>/dev/null || echo 0)
+RAM_T=$((CG_LIMIT / 1024 / 1024))
+RAM_U=$((CG_USE / 1024 / 1024))
+RAM_F=$(( (CG_LIMIT - CG_USE) / 1024 / 1024 ))
+RAM_C=0
+SWAP_T=0
+SWAP_U=0
 DISK=$(df / 2>/dev/null | tail -1)
 DISK_T=$(echo "$DISK" | awk '{print $2}')
 DISK_U=$(echo "$DISK" | awk '{print $3}')
