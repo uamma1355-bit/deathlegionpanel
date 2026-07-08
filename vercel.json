@@ -8,9 +8,12 @@
     { "source": "/api/admin-approve", "destination": "/api/admin-approve" },
     { "source": "/api/applications-page", "destination": "/api/applications-page" },
     { "source": "/api/status-page", "destination": "/api/status-page" },
+    { "source": "/api/statistics-page", "destination": "/api/statistics-page" },
+    { "source": "/api/statistics", "destination": "/api/statistics-page" },
     { "source": "/api/proxy", "destination": "/api/proxy" },
     { "source": "/apply", "destination": "/api/apply-page" },
     { "source": "/status", "destination": "/api/status-page" },
+    { "source": "/statistics", "destination": "/api/statistics-page" },
     { "source": "/admin/applications", "destination": "/api/applications-page" },
     { "source": "/(.*)", "destination": "/api/proxy" }
   ],
