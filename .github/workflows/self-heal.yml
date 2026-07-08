@@ -1,31 +1,16 @@
-# Unified Self-Heal — keeps the single Pterodactyl panel on Daytona healthy.
-# No more Vercel split. The panel is served directly from the Daytona sandbox
-# via its public URL.
-#
-# Required GitHub repo secrets:
-#   DAYTONA_TOKEN  - Daytona API token
-#
-# Optional (only used if sandbox needs full rebuild):
-#   GH_TOKEN       - GitHub PAT (for MySQL backup commits)
-#   MYSQL_ROOT_PW  - MySQL root password
-#   MYSQL_APP_PW   - MySQL app password
-#   ADMIN_USERNAME - Admin username (default: admin)
-#   ADMIN_PASSWORD - Admin password
-
 name: Self-Heal
 
 on:
   schedule:
-    # Every 5 minutes
     - cron: "*/5 * * * *"
   workflow_dispatch:
 
 jobs:
   selfheal:
-    name: Keep unified panel healthy
+    name: Heal all sandboxes
     runs-on: ubuntu-latest
     if: github.repository != 'pterodactyl/panel'
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -34,12 +19,21 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install E2B SDK
+        run: npm install e2b
+
       - name: Run unified self-heal
         env:
           DAYTONA_TOKEN: ${{ secrets.DAYTONA_TOKEN }}
+          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
         run: |
           python3 scripts/selfheal_unified.py 2>&1 | tee selfheal.log
-          echo "## Unified Panel Self-Heal" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Self-Heal Result" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          cat selfheal.log >> "$GITHUB_STEP_SUMMARY"
+          tail -20 selfheal.log >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
