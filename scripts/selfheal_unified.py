@@ -92,22 +92,72 @@ if not panel_ok:
     # Start Docker
     run_on_daytona(PANEL_SANDBOX, "sudo docker info > /dev/null 2>&1 || (sudo dockerd > /tmp/docker.log 2>&1 & sleep 5)", 15)
     
-    # Start PHP
-    run_on_daytona(PANEL_SANDBOX, "ss -tlnp | grep -q :8001 || (cd /home/daytona/pterodactyl-panel && nohup php8.4 -S 0.0.0.0:8001 server.php > /tmp/php.log 2>&1 & sleep 3)", 10)
+    # Start PHP-FPM (binary name is php8.4, service is php8.x-fpm)
+    run_on_daytona(PANEL_SANDBOX, "pgrep -f 'php8' > /dev/null || (sudo service php8.4-fpm start 2>&1 ; sudo service php8.2-fpm start 2>&1 ; sleep 3)", 15)
     
     # Start nginx
-    run_on_daytona(PANEL_SANDBOX, "ss -tlnp | grep -q :8000 || sudo nginx 2>/dev/null", 10)
+    run_on_daytona(PANEL_SANDBOX, "pgrep -x nginx > /dev/null || sudo service nginx start 2>&1 ; sleep 2", 15)
     
-    # Start Wings
-    run_on_daytona(PANEL_SANDBOX, "pgrep -f wings > /dev/null || (nohup sudo setsid /usr/local/bin/wings --config /etc/pterodactyl/config.yml > /tmp/wings.log 2>&1 & disown; sleep 8)", 15)
+    # Ensure Wings config has the correct remote (Panel URL) field
+    # CRITICAL: Wings cannot reach the public Daytona URL from inside the sandbox (loopback blocked)
+    # so it must use http://127.0.0.1:8000 (local nginx -> PHP-FPM)
+    run_on_daytona(PANEL_SANDBOX, """sudo grep -q '^remote:' /etc/pterodactyl/config.yml || echo 'remote: http://127.0.0.1:8000' | sudo tee -a /etc/pterodactyl/config.yml""", 10)
+    # Also ensure allowed_origins is set so browser WebSocket connections work
+    run_on_daytona(PANEL_SANDBOX, """sudo grep -q 'allowed_origins' /etc/pterodactyl/config.yml || cat << 'EOF' | sudo tee -a /etc/pterodactyl/config.yml
+allowed_origins:
+  - "https://deathlegionpanel.vercel.app"
+  - "https://8000-210e4afe-d6d5-4cc1-b3d3-05f40077ea15.daytonaproxy01.eu"
+  - "http://127.0.0.1:8000"
+EOF""", 10)
+    # Ensure api.host/port is 127.0.0.1:8080 (matches nginx routing)
+    run_on_daytona(PANEL_SANDBOX, """sudo sed -i 's/^  host: .*/  host: 127.0.0.1/' /etc/pterodactyl/config.yml ; sudo sed -i 's/^  port: .*/  port: 8080/' /etc/pterodactyl/config.yml""", 10)
     
-    # Reinstall bot files if missing
+    # Start Wings (use sudo bash -c to handle redirect properly)
+    run_on_daytona(PANEL_SANDBOX, "pgrep -f '/usr/local/bin/wings' > /dev/null || sudo bash -c 'nohup /usr/local/bin/wings --config /etc/pterodactyl/config.yml > /var/log/wings-stdout.log 2>&1 &' ; sleep 8", 15)
+    
+    # Reinstall bot template if missing (working Baileys bot skeleton)
     run_on_daytona(PANEL_SANDBOX, """for dir in /var/lib/pterodactyl/volumes/*/; do
   if [ -d "$dir" ] && [ ! -f "$dir/index.js" ]; then
-    echo 'console.log("Upload your bot files via Files tab");' > "$dir/index.js"
-    chown pterodactyl:pterodactyl "$dir/index.js" 2>/dev/null
+    cat > "$dir/index.js" << 'BOTEOF'
+'use strict';
+const fs = require('fs');
+const pino = require('pino');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const SESSION_DIR = process.env.SESSION_DIR || './session';
+fs.mkdirSync(SESSION_DIR, { recursive: true });
+const logger = pino({ level: 'silent' });
+async function startSock() {
+  const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
+  const sock = makeWASocket({ auth: state, logger, printQRInTerminal: true, browser: ['Death Legion','Chrome','1.0.0'] });
+  sock.ev.on('creds.update', saveCreds);
+  sock.ev.on('connection.update', (u) => {
+    const { connection, lastDisconnect, qr } = u;
+    if (qr) console.log('[QR] ' + qr);
+    if (connection === 'close') {
+      const code = lastDisconnect?.error?.output?.statusCode;
+      if (code !== DisconnectReason.loggedOut) setTimeout(startSock, 3000);
+    } else if (connection === 'open') console.log('[conn] OPEN');
+  });
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    if (type !== 'notify') return;
+    for (const m of messages) {
+      if (!m.message) continue;
+      const from = m.key.remoteJid;
+      const text = m.message.conversation || m.message.extendedTextMessage?.text || '';
+      if (text === '!ping') await sock.sendMessage(from, { text: 'pong' });
+    }
+  });
+  return sock;
+}
+process.on('unhandledRejection', (e) => console.error('[unhandled]', e.message));
+startSock().catch(e => { console.error('[fatal]', e); process.exit(1); });
+BOTEOF
+    cat > "$dir/package.json" << 'PKGEOF'
+{"name":"deathlegion-bot","version":"1.0.0","main":"index.js","dependencies":{"@whiskeysockets/baileys":"^6.7.0","pino":"^9.0.0","qrcode-terminal":"^0.12.0"}}
+PKGEOF
+    chown -R pterodactyl:pterodactyl "$dir" 2>/dev/null
   fi
-done""", 10)
+done""", 30)
     
     time.sleep(5)
     panel_ok = check_url(panel_url)
@@ -139,8 +189,8 @@ for i, sbx_id in enumerate(WINGS_SANDBOXES, 2):
         # Pull image
         run_on_daytona(sbx_id, "sudo docker pull ghcr.io/ptero-eggs/yolks:nodejs_24 2>&1 | tail -1", 30)
         
-        # Start Wings
-        run_on_daytona(sbx_id, "pgrep -f wings > /dev/null || (nohup sudo setsid /usr/local/bin/wings --config /etc/pterodactyl/config.yml > /tmp/wings.log 2>&1 & disown; sleep 8)", 15)
+        # Start Wings (use sudo bash -c for proper redirect handling)
+        run_on_daytona(sbx_id, "pgrep -f '/usr/local/bin/wings' > /dev/null || sudo bash -c 'nohup /usr/local/bin/wings --config /etc/pterodactyl/config.yml > /var/log/wings-stdout.log 2>&1 &' ; sleep 8", 15)
         
         # Start nginx
         run_on_daytona(sbx_id, "ss -tlnp | grep -q :8000 || sudo nginx 2>/dev/null", 10)
