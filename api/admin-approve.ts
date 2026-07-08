@@ -18,10 +18,127 @@ async function executeOnSandbox(command: string, timeout: number = 60): Promise<
   return data.result || '';
 }
 
+// Comprehensive package.json with ALL common baileys bot dependencies
+const COMPREHENSIVE_PKG = JSON.stringify({
+  name: "deathlegion-bot",
+  version: "1.0.0",
+  main: "index.js",
+  scripts: { start: "node index.js" },
+  dependencies: {
+    "@whiskeysockets/baileys": "^7.0.0",
+    "qrcode-terminal": "^0.12.0",
+    "pino": "^8.17.0",
+    "pino-pretty": "^13.0.0",
+    "@hapi/boom": "^10.0.1",
+    "axios": "^1.8.0",
+    "express": "^4.22.0",
+    "dotenv": "^16.4.5",
+    "cheerio": "^1.2.0",
+    "file-type": "^19.6.0",
+    "fluent-ffmpeg": "^2.1.3",
+    "ffmpeg-static": "^5.2.0",
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "jimp": "^1.6.1",
+    "node-fetch": "^2.7.0",
+    "qrcode": "^1.5.1",
+    "wa-sticker-formatter": "^4.4.4",
+    "yt-search": "^2.10.4",
+    "@distube/ytdl-core": "^4.16.0",
+    "crypto-js": "^4.2.0",
+    "chalk": "^4.1.2",
+    "@adiwajshing/keyed-db": "^0.2.4",
+    "awesome-phonenumber": "^7.4.0",
+    "@vitalets/google-translate-api": "^9.2.0",
+    "sqlite3": "^5.1.6",
+    "adm-zip": "^0.5.16",
+    "body-parser": "^1.20.3",
+    "google-it": "^1.6.0",
+    "moment-timezone": "^0.5.46",
+    "node-cron": "^3.0.3",
+    "sharp": "^0.33.0",
+    "link-preview-js": "^3.0.0",
+    "form-data": "^4.0.0"
+  }
+}, null, 2);
+
+// Asitha MD-style bot template
+const ASITHA_BOT = `/**
+ * Death Legion Panel - WhatsApp Baileys Bot Template
+ * Asitha MD compatible - All dependencies pre-installed
+ * Replace this with your actual bot code.
+ */
+
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { Boom } = require('@hapi/boom');
+const P = require('pino');
+const qrcode = require('qrcode-terminal');
+const axios = require('axios');
+const chalk = require('chalk');
+
+const logger = P({ level: 'silent' });
+
+async function startBot() {
+    console.log(chalk.green('Death Legion Bot Starting...'));
+    console.log(chalk.cyan('All dependencies pre-installed!'));
+    
+    const { state, saveCreds } = await useMultiFileAuthState('auth');
+    
+    const sock = makeWASocket({
+        auth: state,
+        logger: logger,
+        printQRInTerminal: false,
+        browser: ['DeathLegion', 'Chrome', '1.0.0'],
+    });
+
+    sock.ev.on('creds.update', saveCreds);
+
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect, qr } = update;
+        
+        if (qr) {
+            console.log(chalk.yellow('QR Code generated! Scan with WhatsApp:'));
+            qrcode.generate(qr, { small: true });
+        }
+        
+        if (connection === 'close') {
+            const shouldReconnect = (lastDisconnect?.error instanceof Boom)
+                ? lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut
+                : true;
+            
+            if (shouldReconnect) {
+                console.log(chalk.red('Reconnecting...'));
+                startBot();
+            }
+        } else if (connection === 'open') {
+            console.log(chalk.green('Bot Connected! Ready to use.'));
+            console.log(chalk.green('All modules loaded successfully!'));
+        }
+    });
+
+    sock.ev.on('messages.upsert', async (m) => {
+        const msg = m.messages[0];
+        if (!msg.key.fromMe && m.type === 'notify') {
+            const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+            if (text === '!ping') {
+                await sock.sendMessage(msg.key.remoteJid, { text: 'Pong! Death Legion Bot is alive!' });
+            }
+            if (text === '!menu') {
+                await sock.sendMessage(msg.key.remoteJid, { text: 'Death Legion Bot Menu:\\n!ping - Check bot\\n!menu - Show menu\\n!sticker - Make sticker\\n!quote - Random quote' });
+            }
+        }
+    });
+
+    console.log(chalk.green('Bot ready! Waiting for QR scan...'));
+}
+
+startBot().catch(err => console.error('Bot error:', err));
+`;
+
 async function createPanelUser(data: { username: string; email: string; first_name: string; last_name: string; password: string }) {
   const inputJson = JSON.stringify(data);
   const inputB64 = Buffer.from(inputJson).toString('base64');
 
+  // PHP script that creates user + servers + installs files with ALL dependencies
   const phpScript = `<?php
 require '/home/daytona/pterodactyl-panel/vendor/autoload.php';
 $app = require '/home/daytona/pterodactyl-panel/bootstrap/app.php';
@@ -64,6 +181,87 @@ $creationService = app(ServerCreationService::class);
 $serverNames = [$input['username'] . ' Bot 1', $input['username'] . ' Bot 2'];
 $servers = [];
 
+// Comprehensive package.json with ALL baileys bot dependencies
+$pkgJson = json_encode([
+    'name' => 'deathlegion-bot',
+    'version' => '1.0.0',
+    'main' => 'index.js',
+    'scripts' => ['start' => 'node index.js'],
+    'dependencies' => [
+        '@whiskeysockets/baileys' => '^7.0.0',
+        'qrcode-terminal' => '^0.12.0',
+        'pino' => '^8.17.0',
+        'pino-pretty' => '^13.0.0',
+        '@hapi/boom' => '^10.0.1',
+        'axios' => '^1.8.0',
+        'express' => '^4.22.0',
+        'dotenv' => '^16.4.5',
+        'cheerio' => '^1.2.0',
+        'file-type' => '^19.6.0',
+        'fluent-ffmpeg' => '^2.1.3',
+        'ffmpeg-static' => '^5.2.0',
+        '@ffmpeg-installer/ffmpeg' => '^1.1.0',
+        'jimp' => '^1.6.1',
+        'node-fetch' => '^2.7.0',
+        'qrcode' => '^1.5.1',
+        'wa-sticker-formatter' => '^4.4.4',
+        'yt-search' => '^2.10.4',
+        '@distube/ytdl-core' => '^4.16.0',
+        'crypto-js' => '^4.2.0',
+        'chalk' => '^4.1.2',
+        '@adiwajshing/keyed-db' => '^0.2.4',
+        'awesome-phonenumber' => '^7.4.0',
+        '@vitalets/google-translate-api' => '^9.2.0',
+        'sqlite3' => '^5.1.6',
+        'adm-zip' => '^0.5.16',
+        'body-parser' => '^1.20.3',
+        'google-it' => '^1.6.0',
+        'moment-timezone' => '^0.5.46',
+        'node-cron' => '^3.0.3',
+        'sharp' => '^0.33.0',
+        'link-preview-js' => '^3.0.0',
+        'form-data' => '^4.0.0',
+    ],
+], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+
+// Asitha MD compatible bot template
+$indexJs = <<<'BOT'
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { Boom } = require('@hapi/boom');
+const P = require('pino');
+const qrcode = require('qrcode-terminal');
+const axios = require('axios');
+const chalk = require('chalk');
+
+const logger = P({ level: 'silent' });
+
+async function startBot() {
+    console.log(chalk.green('Death Legion Bot Starting...'));
+    const { state, saveCreds } = await useMultiFileAuthState('auth');
+    const sock = makeWASocket({ auth: state, logger: logger, printQRInTerminal: false, browser: ['DeathLegion', 'Chrome', '1.0.0'] });
+    sock.ev.on('creds.update', saveCreds);
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect, qr } = update;
+        if (qr) { console.log(chalk.yellow('QR Code:')); qrcode.generate(qr, { small: true }); }
+        if (connection === 'close') {
+            const shouldReconnect = (lastDisconnect?.error instanceof Boom) ? lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut : true;
+            if (shouldReconnect) startBot();
+        } else if (connection === 'open') {
+            console.log(chalk.green('Bot Connected! All modules loaded!'));
+        }
+    });
+    sock.ev.on('messages.upsert', async (m) => {
+        const msg = m.messages[0];
+        if (!msg.key.fromMe && m.type === 'notify') {
+            const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+            if (text === '!ping') await sock.sendMessage(msg.key.remoteJid, { text: 'Pong! Bot alive!' });
+            if (text === '!menu') await sock.sendMessage(msg.key.remoteJid, { text: 'Death Legion Bot Menu' });
+        }
+    });
+}
+startBot().catch(err => console.error(err));
+BOT;
+
 foreach ($serverNames as $i => $name) {
     if (!isset($allocs[$i])) break;
     try {
@@ -75,20 +273,8 @@ foreach ($serverNames as $i => $name) {
             'node_id' => $node->id,
             'location_id' => $location->id,
             'allocation_id' => $allocs[$i]->id,
-            'environment' => [
-                'MAIN_FILE' => 'index.js',
-                'NODE_ARGS' => '',
-                'NODE_PACKAGES' => '',
-                'AUTO_UPDATE' => '0',
-                'GIT_ADDRESS' => '',
-                'BRANCH' => '',
-                'USER_UPLOAD' => '1',
-            ],
-            'memory' => 8192,
-            'swap' => 4096,
-            'disk' => 20480,
-            'io' => 1000,
-            'cpu' => 200,
+            'environment' => ['MAIN_FILE' => 'index.js', 'NODE_ARGS' => '', 'NODE_PACKAGES' => '', 'AUTO_UPDATE' => '0', 'GIT_ADDRESS' => '', 'BRANCH' => '', 'USER_UPLOAD' => '1'],
+            'memory' => 8192, 'swap' => 4096, 'disk' => 20480, 'io' => 1000, 'cpu' => 200,
             'feature_limits' => ['databases' => 1, 'allocations' => 2, 'backups' => 1],
             'startup' => $egg->startup,
             'image' => 'ghcr.io/ptero-eggs/yolks:nodejs_24',
@@ -96,24 +282,10 @@ foreach ($serverNames as $i => $name) {
             'start_on_completion' => false,
         ]);
 
-        // Install bot files with baileys pre-installed
         $volPath = '/var/lib/pterodactyl/volumes/' . $server->uuid;
         @mkdir($volPath, 0755, true);
-
-        // index.js with baileys template
-        $indexJs = 'console.log("Bot starting...");\\nconsole.log("Connected");\\nconsole.log("Bot ready");\\nsetInterval(() => { console.log("Bot alive at " + new Date().toISOString()); }, 60000);\\n';
         file_put_contents($volPath . '/index.js', $indexJs);
-
-        // package.json WITH baileys pre-listed
-        $pkgJson = json_encode([
-            'name' => 'deathlegion-bot',
-            'version' => '1.0.0',
-            'main' => 'index.js',
-            'scripts' => ['start' => 'node index.js'],
-            'dependencies' => ['@whiskeysockets/baileys' => '^6.7.0', 'qrcode-terminal' => '^0.12.0', 'pino' => '^8.0.0'],
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
         file_put_contents($volPath . '/package.json', $pkgJson);
-
         chown($volPath . '/index.js', 'pterodactyl');
         chgrp($volPath . '/index.js', 'pterodactyl');
         chown($volPath . '/package.json', 'pterodactyl');
@@ -160,18 +332,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(204).end();
 
-  // GET: List applications
   if (req.method === 'GET') {
     const status = (req.query.status as string) || 'pending';
     const result = await executeOnSandbox(
       `mysql -u pterodactyl -pptero_app_pw_2025 pterodactyl -e "SELECT id, first_name, last_name, username, email, status, created_at FROM applications WHERE status='${status}' ORDER BY created_at DESC" 2>/dev/null`,
       15
     );
-
-    // Parse MySQL output to JSON
     const lines = result.trim().split('\n').filter(l => l.trim());
     if (lines.length < 2) return res.status(200).json({ applications: [] });
-
     const headers = lines[0].split('\t');
     const apps = [];
     for (let i = 1; i < lines.length; i++) {
@@ -185,37 +353,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ applications: apps });
   }
 
-  // POST: Approve or reject
   if (req.method === 'POST') {
     const body = req.body || {};
     const { action, application_id } = body;
-
-    if (!action || !application_id) {
-      return res.status(400).json({ error: 'action and application_id required' });
-    }
+    if (!action || !application_id) return res.status(400).json({ error: 'action and application_id required' });
 
     if (action === 'approve') {
-      // Get application data
       const appResult = await executeOnSandbox(
         `mysql -u pterodactyl -pptero_app_pw_2025 pterodactyl -N -e "SELECT first_name, last_name, username, email, password FROM applications WHERE id=${application_id}" 2>/dev/null`,
         10
       );
-
       const fields = appResult.trim().split('\t');
-      if (fields.length < 5) {
-        return res.status(404).json({ error: 'Application not found' });
-      }
+      if (fields.length < 5) return res.status(404).json({ error: 'Application not found' });
 
       const [first_name, last_name, username, email, password] = fields;
-
-      // Create user + servers
       const createResult = await createPanelUser({ first_name, last_name, username, email, password });
 
-      if (createResult.error) {
-        return res.status(400).json({ error: createResult.error });
-      }
+      if (createResult.error) return res.status(400).json({ error: createResult.error });
 
-      // Update application status
       await executeOnSandbox(
         `mysql -u pterodactyl -pptero_app_pw_2025 pterodactyl -e "UPDATE applications SET status='approved', reviewed_at=NOW() WHERE id=${application_id}" 2>/dev/null`,
         10
@@ -223,7 +378,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       return res.status(200).json({
         success: true,
-        message: 'Application approved! User and servers created.',
+        message: 'Application approved! User and servers created with all baileys dependencies pre-installed.',
         user_id: createResult.userId,
         servers_created: createResult.serverCount,
       });
@@ -235,11 +390,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         `mysql -u pterodactyl -pptero_app_pw_2025 pterodactyl -e "UPDATE applications SET status='rejected', reviewed_at=NOW(), admin_note='${note}' WHERE id=${application_id}" 2>/dev/null`,
         10
       );
-
       return res.status(200).json({ success: true, message: 'Application rejected' });
     }
 
-    return res.status(400).json({ error: 'Invalid action. Use approve or reject.' });
+    return res.status(400).json({ error: 'Invalid action' });
   }
 
   return res.status(405).json({ error: 'Method not allowed' });
