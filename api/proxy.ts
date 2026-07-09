@@ -117,35 +117,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (shouldRewriteBody(contentType)) {
       let bodyStr = buffer.toString('utf8');
-      bodyStr = rewriteBody(bodyStr, vercelHost);
 
+      // CRITICAL: Don't rewrite URLs in websocket token responses!
+      // The browser needs the ORIGINAL Daytona URL for WebSocket connections
+      // because Vercel serverless functions CANNOT proxy WebSocket.
+      const isWebsocketResponse = (req.url || '').includes('/websocket') || bodyStr.includes('"socket"');
+      if (!isWebsocketResponse) {
+        bodyStr = rewriteBody(bodyStr, vercelHost);
+      }
+
+      // Inject WebSocket interceptor: redirect /api/servers/{uuid}/ws to Daytona URL
+      // Vercel can't proxy WebSocket, so the browser connects directly to Daytona
       if (contentType.includes('text/html') && !bodyStr.includes('__WS_INTERCEPTOR_INJECTED__')) {
         const wingsHostB64 = Buffer.from(DAYTONA_HOST).toString('base64');
-        const interceptor = `
-<script id="__WS_INTERCEPTOR_INJECTED__">
-(function() {
-  var WINGS_HOST = atob('${wingsHostB64}');
-  var OrigWebSocket = window.WebSocket;
-  function PatchedWebSocket(url, protocols) {
-    if (url && url.charAt(0) === '/') {
-      url = 'wss://' + WINGS_HOST + url;
-    }
-    return protocols ? new OrigWebSocket(url, protocols) : new OrigWebSocket(url);
-  }
-  PatchedWebSocket.prototype = OrigWebSocket.prototype;
-  PatchedWebSocket.CONNECTING = OrigWebSocket.CONNECTING;
-  PatchedWebSocket.OPEN = OrigWebSocket.OPEN;
-  PatchedWebSocket.CLOSING = OrigWebSocket.CLOSING;
-  PatchedWebSocket.CLOSED = OrigWebSocket.CLOSED;
-  window.WebSocket = PatchedWebSocket;
-})();
-</script>`;
+        const interceptor = '\n<script id="__WS_INTERCEPTOR_INJECTED__">\n(function() {\n  var WINGS_HOST = atob(\'' + wingsHostB64 + '\');\n  var OrigWebSocket = window.WebSocket;\n  function PatchedWebSocket(url, protocols) {\n    if (url && url.charAt(0) === \'/\') { url = \'wss://\' + WINGS_HOST + url; }\n    return protocols ? new OrigWebSocket(url, protocols) : new OrigWebSocket(url);\n  }\n  PatchedWebSocket.prototype = OrigWebSocket.prototype;\n  PatchedWebSocket.CONNECTING = OrigWebSocket.CONNECTING;\n  PatchedWebSocket.OPEN = OrigWebSocket.OPEN;\n  PatchedWebSocket.CLOSING = OrigWebSocket.CLOSING;\n  PatchedWebSocket.CLOSED = OrigWebSocket.CLOSED;\n  window.WebSocket = PatchedWebSocket;\n})();\n</script>';
         if (bodyStr.includes('</head>')) {
-          bodyStr = bodyStr.replace('</head>', interceptor + '</head>');
-        } else if (bodyStr.includes('<body')) {
-          bodyStr = bodyStr.replace('<body', interceptor + '<body');
-        } else {
-          bodyStr = interceptor + bodyStr;
+          bodyStr = bodyStr.replace('</head>', interceptor + '\n</head>');
         }
       }
 
