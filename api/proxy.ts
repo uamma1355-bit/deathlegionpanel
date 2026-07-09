@@ -125,11 +125,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (isWebsocketResponse) {
         // Rewrite ws://127.0.0.1:PORT and http://127.0.0.1:PORT to wss://DAYTONA_URL:443
         bodyStr = bodyStr.replace(
-          /wss?:\/\/127\.0\.0\.1:\d+/g,
+          /wss?:\\*\/\\*\/127\.0\.0\.1:\d+/g,
           `wss://${DAYTONA_HOST}:443`
         );
         bodyStr = bodyStr.replace(
-          /https?:\/\/127\.0\.0\.1:\d+/g,
+          /https?:\\*\/\\*\/127\.0\.0\.1:\d+/g,
           `https://${DAYTONA_HOST}:443`
         );
       } else {
