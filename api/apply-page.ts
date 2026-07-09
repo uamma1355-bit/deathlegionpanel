@@ -211,8 +211,8 @@ const APPLY_PAGE_HTML = `<!DOCTYPE html>
       </form>
       <div class="legion-auth-section">
         <div class="divider"><span>OR</span></div>
-        <a href="/legion-auth" class="legion-auth-btn">Login with Death Legion ID</a>
-        <p>Already have a Death Legion ID? Skip the form and login directly.</p>
+        <a href="/legion-auth" class="legion-auth-btn">Connect with Death Legion</a>
+        <p>Already have a Death Legion ID? Connect and get instant access.</p>
       </div>
     </div>
     <div class="card success" id="successCard">

@@ -200,7 +200,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     var btn = document.createElement('a');
     btn.className = 'dl-legion-auth-btn';
     btn.href = '/legion-auth';
-    btn.innerHTML = 'Login with Death Legion ID';
+    btn.innerHTML = 'Connect with Death Legion';
     loginForm.parentNode.insertBefore(btn, divider.nextSibling);
   }
 
