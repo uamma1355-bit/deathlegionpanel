@@ -118,16 +118,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (shouldRewriteBody(contentType)) {
       let bodyStr = buffer.toString('utf8');
 
-      // CRITICAL: Don't rewrite URLs in websocket token responses!
-      // The browser needs the ORIGINAL Daytona URL for WebSocket connections
-      // because Vercel serverless functions CANNOT proxy WebSocket.
+      // For websocket token responses: rewrite 127.0.0.1:808X to Daytona public URL
+      // The Panel uses fqdn=127.0.0.1 for internal Wings communication,
+      // but the browser needs the Daytona public URL for WebSocket connections.
       const isWebsocketResponse = (req.url || '').includes('/websocket') || bodyStr.includes('"socket"');
-      if (!isWebsocketResponse) {
+      if (isWebsocketResponse) {
+        // Rewrite ws://127.0.0.1:PORT and http://127.0.0.1:PORT to wss://DAYTONA_URL:443
+        bodyStr = bodyStr.replace(
+          /wss?:\/\/127\.0\.0\.1:\d+/g,
+          `wss://${DAYTONA_HOST}:443`
+        );
+        bodyStr = bodyStr.replace(
+          /https?:\/\/127\.0\.0\.1:\d+/g,
+          `https://${DAYTONA_HOST}:443`
+        );
+      } else {
         bodyStr = rewriteBody(bodyStr, vercelHost);
       }
 
       // Inject WebSocket interceptor: redirect /api/servers/{uuid}/ws to Daytona URL
-      // Vercel can't proxy WebSocket, so the browser connects directly to Daytona
       if (contentType.includes('text/html') && !bodyStr.includes('__WS_INTERCEPTOR_INJECTED__')) {
         const wingsHostB64 = Buffer.from(DAYTONA_HOST).toString('base64');
         const interceptor = '\n<script id="__WS_INTERCEPTOR_INJECTED__">\n(function() {\n  var WINGS_HOST = atob(\'' + wingsHostB64 + '\');\n  var OrigWebSocket = window.WebSocket;\n  function PatchedWebSocket(url, protocols) {\n    if (url && url.charAt(0) === \'/\') { url = \'wss://\' + WINGS_HOST + url; }\n    return protocols ? new OrigWebSocket(url, protocols) : new OrigWebSocket(url);\n  }\n  PatchedWebSocket.prototype = OrigWebSocket.prototype;\n  PatchedWebSocket.CONNECTING = OrigWebSocket.CONNECTING;\n  PatchedWebSocket.OPEN = OrigWebSocket.OPEN;\n  PatchedWebSocket.CLOSING = OrigWebSocket.CLOSING;\n  PatchedWebSocket.CLOSED = OrigWebSocket.CLOSED;\n  window.WebSocket = PatchedWebSocket;\n})();\n</script>';
