@@ -144,8 +144,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           bodyStr = bodyStr.replace('</head>', interceptor + '\n</head>');
         }
 
-        // Inject BETA badge + Legion Auth button on login page
-        if (bodyStr.includes('Login to Continue') || bodyStr.includes('login-page') || bodyStr.includes('auth/login')) {
+        // Inject BETA badge + Legion Auth button on ALL pages
+        // The Pterodactyl SPA renders content client-side, so we inject a
+        // MutationObserver that watches for the login form appearing
+        if (!bodyStr.includes('__LEGION_INJECT__')) {
           const legionInjection = `
 <style id="__LEGION_INJECT__">
 .dl-beta-badge {
@@ -155,6 +157,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em;
   text-transform: uppercase; font-family: 'Inter', sans-serif;
   box-shadow: 0 2px 10px rgba(188,110,60,0.3);
+  pointer-events: none;
 }
 .dl-legion-auth-btn {
   display: block; width: 100%; margin-top: 1rem; padding: 0.75rem;
@@ -178,28 +181,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 .dl-legion-divider span { padding: 0 0.75rem; }
 </style>
 <div class="dl-beta-badge">BETA</div>
-<script>
+<script id="__LEGION_INJECT__">
 (function() {
   function injectLegionAuth() {
+    if (document.querySelector('.dl-legion-auth-btn')) return;
+    // Look for the login form — Pterodactyl SPA renders it inside #app
     var loginForm = document.querySelector('form');
-    if (!loginForm || document.querySelector('.dl-legion-auth-btn')) return;
+    if (!loginForm) return;
+    // Check if we're on the login page (form has username/password fields)
+    var hasPassword = loginForm.querySelector('input[type="password"]');
+    if (!hasPassword) return;
+
     var divider = document.createElement('div');
     divider.className = 'dl-legion-divider';
     divider.innerHTML = '<span>OR</span>';
     loginForm.parentNode.insertBefore(divider, loginForm.nextSibling);
+
     var btn = document.createElement('a');
     btn.className = 'dl-legion-auth-btn';
     btn.href = '/legion-auth';
     btn.innerHTML = 'Login with Death Legion ID';
     loginForm.parentNode.insertBefore(btn, divider.nextSibling);
   }
+
+  // Try immediately
+  injectLegionAuth();
+  // Try after DOMContentLoaded
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', injectLegionAuth);
-  } else {
-    injectLegionAuth();
   }
-  setTimeout(injectLegionAuth, 1000);
-  setTimeout(injectLegionAuth, 3000);
+  // Use MutationObserver to watch for SPA rendering the login form
+  var observer = new MutationObserver(function() {
+    injectLegionAuth();
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+  // Also try periodically (observer might miss some SPA updates)
+  setInterval(injectLegionAuth, 1000);
 })();
 </script>`;
           if (bodyStr.includes('</body>')) {

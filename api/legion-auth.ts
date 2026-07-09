@@ -297,6 +297,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       <div class="info">
         <p>Don't have a Death Legion ID? <a href="${LEGION_AUTH_URL}" target="_blank">Register here</a></p>
         <p style="margin-top:0.5rem">Your Death Legion ID works across all Legion apps.</p>
+        <p style="margin-top:0.5rem;color:#555;font-size:0.75rem">Or apply directly with the form below.</p>
+      </div>
+      <div style="margin-top:1rem;text-align:center">
+        <a href="/apply" style="color:#e89060;text-decoration:none;font-size:0.85rem">Apply without Legion ID →</a>
       </div>
     </div>
   </div>
@@ -306,38 +310,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const btnText = document.getElementById('btnText');
       const status = document.getElementById('status');
       const creds = document.getElementById('credentials');
-      
+
       btn.disabled = true;
-      btnText.innerHTML = '<span class="spinner"></span>Checking Death Legion session...';
+      btnText.innerHTML = '<span class="spinner"></span>Connecting to Death Legion...';
       status.className = 'status';
-      
+
       try {
-        // Check if user is logged in to Death Legion
-        const sessionRes = await fetch('${LEGION_AUTH_URL}/api/session', {
-          credentials: 'include'
-        });
-        const sessionData = await sessionRes.json();
-        
-        if (!sessionData.user) {
-          // Redirect to Death Legion login
+        // Try to check Death Legion session via direct fetch
+        let sessionData = null;
+        try {
+          const sessionRes = await fetch('${LEGION_AUTH_URL}/api/session', {
+            credentials: 'include',
+            mode: 'cors',
+          });
+          if (sessionRes.ok) {
+            sessionData = await sessionRes.json();
+          }
+        } catch (corsErr) {
+          // CORS failed — redirect to Death Legion login
+          status.className = 'status error';
+          status.textContent = 'Redirecting to Death Legion login...';
+          setTimeout(() => {
+            window.location.href = '${LEGION_AUTH_URL}/?redirect=' + encodeURIComponent(window.location.href);
+          }, 1500);
+          return;
+        }
+
+        if (!sessionData || !sessionData.user) {
+          // Not logged in — redirect to Death Legion
           status.className = 'status error';
           status.textContent = 'You need to log in to Death Legion first. Redirecting...';
           setTimeout(() => {
-            window.location.href = '${LEGION_AUTH_URL}';
+            window.location.href = '${LEGION_AUTH_URL}/?redirect=' + encodeURIComponent(window.location.href);
           }, 2000);
           return;
         }
-        
+
         btnText.innerHTML = '<span class="spinner"></span>Creating your bot servers...';
-        
+
         // Call our API to create/login the user
-        const res = await fetch('/api/legion-auth?session=' + encodeURIComponent('placeholder'), {
+        const res = await fetch('/api/legion-auth', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ user: sessionData.user })
         });
         const data = await res.json();
-        
+
         if (data.success) {
           status.className = 'status success';
           status.textContent = 'Welcome, ' + data.user.username + '! Your bot servers are ready.';
@@ -346,7 +364,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             '<div><span class="label">Username:</span> <span class="value">' + data.login.username + '</span></div>' +
             '<div><span class="label">Password:</span> <span class="value">' + data.login.password + '</span></div>' +
             '<div style="margin-top:0.8rem"><a href="' + data.panelUrl + '" style="color:#e89060">Go to Panel →</a></div>';
-          btnText.textContent = '✓ Done!';
+          btnText.textContent = 'Done!';
         } else {
           status.className = 'status error';
           status.textContent = 'Error: ' + (data.error || 'Unknown error');
@@ -360,16 +378,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         btnText.textContent = 'Login with Death Legion ID';
       }
     }
-    
-    // Auto-check session on load
-    fetch('${LEGION_AUTH_URL}/api/session', { credentials: 'include' })
-      .then(r => r.json())
+
+    // Auto-check session on load (best effort)
+    fetch('${LEGION_AUTH_URL}/api/session', { credentials: 'include', mode: 'cors' })
+      .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (data.user) {
+        if (data && data.user) {
           document.getElementById('btnText').textContent = 'Continue as ' + data.user.username;
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        // CORS blocked — user might not be logged in or cross-origin not allowed
+      });
   </script>
 </body>
 </html>`;
