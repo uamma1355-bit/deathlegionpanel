@@ -136,12 +136,85 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         bodyStr = rewriteBody(bodyStr, vercelHost);
       }
 
-      // Inject WebSocket interceptor: redirect /api/servers/{uuid}/ws to Daytona URL
+      // Inject WebSocket interceptor + Legion Auth button + BETA badge
       if (contentType.includes('text/html') && !bodyStr.includes('__WS_INTERCEPTOR_INJECTED__')) {
         const wingsHostB64 = Buffer.from(DAYTONA_HOST).toString('base64');
         const interceptor = '\n<script id="__WS_INTERCEPTOR_INJECTED__">\n(function() {\n  var WINGS_HOST = atob(\'' + wingsHostB64 + '\');\n  var OrigWebSocket = window.WebSocket;\n  function PatchedWebSocket(url, protocols) {\n    if (url && url.charAt(0) === \'/\') { url = \'wss://\' + WINGS_HOST + url; }\n    return protocols ? new OrigWebSocket(url, protocols) : new OrigWebSocket(url);\n  }\n  PatchedWebSocket.prototype = OrigWebSocket.prototype;\n  PatchedWebSocket.CONNECTING = OrigWebSocket.CONNECTING;\n  PatchedWebSocket.OPEN = OrigWebSocket.OPEN;\n  PatchedWebSocket.CLOSING = OrigWebSocket.CLOSING;\n  PatchedWebSocket.CLOSED = OrigWebSocket.CLOSED;\n  window.WebSocket = PatchedWebSocket;\n})();\n</script>';
         if (bodyStr.includes('</head>')) {
           bodyStr = bodyStr.replace('</head>', interceptor + '\n</head>');
+        }
+
+        // Inject BETA badge + Legion Auth button on login page
+        if (bodyStr.includes('Login to Continue') || bodyStr.includes('login-page') || bodyStr.includes('auth/login')) {
+          const legionInjection = `
+<style id="__LEGION_INJECT__">
+.dl-beta-badge {
+  position: fixed; top: 12px; right: 12px; z-index: 99999;
+  background: linear-gradient(135deg, #bc6e3c, #e89060);
+  color: #fff; padding: 4px 12px; border-radius: 20px;
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; font-family: 'Inter', sans-serif;
+  box-shadow: 0 2px 10px rgba(188,110,60,0.3);
+}
+.dl-legion-auth-btn {
+  display: block; width: 100%; margin-top: 1rem; padding: 0.75rem;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border: 1px solid rgba(188,110,60,0.3); border-radius: 8px;
+  color: #e89060; font-size: 0.9rem; font-weight: 600;
+  text-align: center; cursor: pointer; transition: all 0.2s;
+  text-decoration: none; font-family: 'Inter', sans-serif;
+}
+.dl-legion-auth-btn:hover {
+  transform: translateY(-1px); box-shadow: 0 4px 15px rgba(188,110,60,0.2);
+  border-color: rgba(188,110,60,0.5); background: linear-gradient(135deg, #16213e 0%, #1a1a2e 100%);
+}
+.dl-legion-divider {
+  display: flex; align-items: center; margin: 1rem 0;
+  color: #555; font-size: 0.8rem;
+}
+.dl-legion-divider::before, .dl-legion-divider::after {
+  content: ''; flex: 1; height: 1px; background: rgba(255,255,255,0.08);
+}
+.dl-legion-divider span { padding: 0 0.75rem; }
+</style>
+<div class="dl-beta-badge">BETA</div>
+<script>
+(function() {
+  function injectLegionAuth() {
+    var loginForm = document.querySelector('form');
+    if (!loginForm || document.querySelector('.dl-legion-auth-btn')) return;
+    var divider = document.createElement('div');
+    divider.className = 'dl-legion-divider';
+    divider.innerHTML = '<span>OR</span>';
+    loginForm.parentNode.insertBefore(divider, loginForm.nextSibling);
+    var btn = document.createElement('a');
+    btn.className = 'dl-legion-auth-btn';
+    btn.href = '/legion-auth';
+    btn.innerHTML = 'Login with Death Legion ID';
+    loginForm.parentNode.insertBefore(btn, divider.nextSibling);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', injectLegionAuth);
+  } else {
+    injectLegionAuth();
+  }
+  setTimeout(injectLegionAuth, 1000);
+  setTimeout(injectLegionAuth, 3000);
+})();
+</script>`;
+          if (bodyStr.includes('</body>')) {
+            bodyStr = bodyStr.replace('</body>', legionInjection + '\n</body>');
+          } else {
+            bodyStr += legionInjection;
+          }
+        }
+
+        // Inject BETA badge on ALL pages (not just login)
+        if (!bodyStr.includes('dl-beta-badge')) {
+          const betaBadge = '\n<div class="dl-beta-badge" style="position:fixed;top:12px;right:12px;z-index:99999;background:linear-gradient(135deg,#bc6e3c,#e89060);color:#fff;padding:4px 12px;border-radius:20px;font-size:0.7rem;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;font-family:Inter,sans-serif;box-shadow:0 2px 10px rgba(188,110,60,0.3);pointer-events:none;">BETA</div>';
+          if (bodyStr.includes('</body>')) {
+            bodyStr = bodyStr.replace('</body>', betaBadge + '\n</body>');
+          }
         }
       }
 

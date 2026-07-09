@@ -143,9 +143,46 @@ const APPLY_PAGE_HTML = `<!DOCTYPE html>
       font-family: 'Inter', sans-serif; font-size: 1rem;
     }
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .beta-badge {
+      position: fixed; top: 12px; right: 12px; z-index: 999;
+      background: linear-gradient(135deg, #bc6e3c, #e89060);
+      color: #fff; padding: 4px 12px; border-radius: 20px;
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em;
+      text-transform: uppercase; font-family: 'Inter', sans-serif;
+      box-shadow: 0 2px 10px rgba(188,110,60,0.3); pointer-events: none;
+    }
+    .legion-auth-section {
+      margin-top: 1.5rem; padding-top: 1.5rem;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      text-align: center;
+    }
+    .legion-auth-section .divider {
+      display: flex; align-items: center; margin-bottom: 1rem;
+      color: #555; font-size: 0.8rem;
+    }
+    .legion-auth-section .divider::before, .legion-auth-section .divider::after {
+      content: ''; flex: 1; height: 1px; background: rgba(255,255,255,0.08);
+    }
+    .legion-auth-section .divider span { padding: 0 0.75rem; }
+    .legion-auth-btn {
+      display: block; width: 100%; padding: 0.75rem;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      border: 1px solid rgba(188,110,60,0.3); border-radius: 8px;
+      color: #e89060; font-size: 0.9rem; font-weight: 600;
+      text-align: center; cursor: pointer; transition: all 0.2s;
+      text-decoration: none; font-family: 'Inter', sans-serif;
+    }
+    .legion-auth-btn:hover {
+      transform: translateY(-1px); box-shadow: 0 4px 15px rgba(188,110,60,0.2);
+      border-color: rgba(188,110,60,0.5);
+    }
+    .legion-auth-section p {
+      color: #666; font-size: 0.8rem; margin-top: 0.75rem;
+    }
   </style>
 </head>
 <body>
+  <div class="beta-badge">BETA</div>
   <div class="container">
     <div class="logo">Death Legion</div>
     <div class="tagline">WhatsApp Baileys Bot Hosting</div>
@@ -172,6 +209,11 @@ const APPLY_PAGE_HTML = `<!DOCTYPE html>
         </div>
         <button type="submit" class="btn" id="submitBtn">Apply Now</button>
       </form>
+      <div class="legion-auth-section">
+        <div class="divider"><span>OR</span></div>
+        <a href="/legion-auth" class="legion-auth-btn">Login with Death Legion ID</a>
+        <p>Already have a Death Legion ID? Skip the form and login directly.</p>
+      </div>
     </div>
     <div class="card success" id="successCard">
       <div class="check">&#10003;</div>
