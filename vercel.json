@@ -1,34 +1,110 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
-    { "source": "/api/health", "destination": "/api/health" },
-    { "source": "/api/apply", "destination": "/api/apply" },
-    { "source": "/api/apply-page", "destination": "/api/apply-page" },
-    { "source": "/api/admin-approve", "destination": "/api/admin-approve" },
-    { "source": "/api/applications-page", "destination": "/api/applications-page" },
-    { "source": "/api/status-page", "destination": "/api/status-page" },
-    { "source": "/api/statistics-page", "destination": "/api/statistics-page" },
-    { "source": "/api/statistics", "destination": "/api/statistics-page" },
-    { "source": "/api/proxy", "destination": "/api/proxy" },
-    { "source": "/api/legion-auth", "destination": "/api/legion-auth" },
-    { "source": "/api/e2b-storage", "destination": "/api/e2b-storage" },
-    { "source": "/api/e2b", "destination": "/api/e2b-storage" },
-    { "source": "/api/restore-applications", "destination": "/api/restore-applications" },
-    { "source": "/legion-auth", "destination": "/api/legion-auth" },
-    { "source": "/legion", "destination": "/api/legion-auth" },
-    { "source": "/apply", "destination": "/api/apply-page" },
-    { "source": "/status", "destination": "/api/status-page" },
-    { "source": "/statistics", "destination": "/api/statistics-page" },
-    { "source": "/admin/applications", "destination": "/api/applications-page" },
-    { "source": "/(.*)", "destination": "/api/proxy" }
+    {
+      "source": "/api/auto-start",
+      "destination": "/api/auto-start"
+    },
+    {
+      "source": "/api/health",
+      "destination": "/api/health"
+    },
+    {
+      "source": "/api/apply",
+      "destination": "/api/apply"
+    },
+    {
+      "source": "/api/apply-page",
+      "destination": "/api/apply-page"
+    },
+    {
+      "source": "/api/admin-approve",
+      "destination": "/api/admin-approve"
+    },
+    {
+      "source": "/api/applications-page",
+      "destination": "/api/applications-page"
+    },
+    {
+      "source": "/api/status-page",
+      "destination": "/api/status-page"
+    },
+    {
+      "source": "/api/statistics-page",
+      "destination": "/api/statistics-page"
+    },
+    {
+      "source": "/api/statistics",
+      "destination": "/api/statistics-page"
+    },
+    {
+      "source": "/api/proxy",
+      "destination": "/api/proxy"
+    },
+    {
+      "source": "/api/legion-auth",
+      "destination": "/api/legion-auth"
+    },
+    {
+      "source": "/api/e2b-storage",
+      "destination": "/api/e2b-storage"
+    },
+    {
+      "source": "/api/e2b",
+      "destination": "/api/e2b-storage"
+    },
+    {
+      "source": "/api/restore-applications",
+      "destination": "/api/restore-applications"
+    },
+    {
+      "source": "/legion-auth",
+      "destination": "/api/legion-auth"
+    },
+    {
+      "source": "/legion",
+      "destination": "/api/legion-auth"
+    },
+    {
+      "source": "/apply",
+      "destination": "/api/apply-page"
+    },
+    {
+      "source": "/status",
+      "destination": "/api/status-page"
+    },
+    {
+      "source": "/statistics",
+      "destination": "/api/statistics-page"
+    },
+    {
+      "source": "/admin/applications",
+      "destination": "/api/applications-page"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/api/proxy"
+    }
   ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Frame-Options", "value": "ALLOWALL" },
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        {
+          "key": "X-Frame-Options",
+          "value": "ALLOWALL"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
       ]
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/auto-start",
+      "schedule": "*/3 * * * *"
     }
   ]
 }
