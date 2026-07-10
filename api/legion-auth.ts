@@ -1,23 +1,21 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 /**
- * Legion Auth — OAuth2 Integration
- * ================================
- * Implements the full OAuth2 authorization code flow from the Death Legion platform.
+ * Legion Auth — Working Integration
+ * =================================
+ * The Death Legion platform's OAuth2 endpoints are currently broken (500 error).
+ * NextAuth has a configuration error (?error=Configuration).
+ * No CORS headers on /api/session (cross-origin browser requests blocked).
  *
- * Flow:
- *   1. User clicks "Connect with Death Legion"
- *   2. Browser opens popup → https://deathlegion.vercel.app/api/oauth/authorize?...
- *   3. User approves → redirected back to /api/legion-auth?code=...&state=...
- *   4. Server exchanges code for access_token (POST /api/oauth/token)
- *   5. Server fetches user info (GET /api/oauth/userinfo)
- *   6. Server creates Pterodactyl user + servers
- *   7. Returns credentials to the user
+ * Working approach:
+ *   1. User clicks "Connect with Death Legion" → opens deathlegion.vercel.app in new tab
+ *   2. User registers/logs in on deathlegion.vercel.app
+ *   3. User comes back and enters their Death Legion username
+ *   4. We create a Pterodactyl user + 2 bot servers with that username
+ *   5. Show panel credentials
  *
- * OAuth2 endpoints:
- *   Authorize: GET  https://deathlegion.vercel.app/api/oauth/authorize
- *   Token:     POST https://deathlegion.vercel.app/api/oauth/token
- *   UserInfo:  GET  https://deathlegion.vercel.app/api/oauth/userinfo
+ * When the Death Legion platform fixes their OAuth, we can switch back to
+ * the proper OAuth2 authorization code flow.
  */
 
 const LEGION_AUTH_URL = 'https://deathlegion.vercel.app';
@@ -25,8 +23,7 @@ const DAYTONA_TOKEN = process.env.DAYTONA_TOKEN || '';
 const SANDBOX_ID = '210e4afe-d6d5-4cc1-b3d3-05f40077ea15';
 const DAYTONA_API = 'https://app.daytona.io/api';
 
-// OAuth2 client credentials — these need to be registered on the Death Legion admin panel
-// For now, use env vars. If not set, the page shows a "coming soon" message.
+// OAuth2 credentials (for when the Death Legion platform fixes their OAuth)
 const OAUTH_CLIENT_ID = process.env.DL_OAUTH_CLIENT_ID || '';
 const OAUTH_CLIENT_SECRET = process.env.DL_OAUTH_CLIENT_SECRET || '';
 const OAUTH_REDIRECT_URI = 'https://deathlegionpanel.vercel.app/api/legion-auth';
@@ -35,10 +32,7 @@ async function executeOnSandbox(command: string, timeout: number = 120): Promise
   const url = `${DAYTONA_API}/toolbox/${SANDBOX_ID}/toolbox/process/execute`;
   const resp = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${DAYTONA_TOKEN}`,
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Authorization': `Bearer ${DAYTONA_TOKEN}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ command, cwd: '/home/daytona', timeout }),
   });
   const data = await resp.json() as any;
@@ -51,24 +45,15 @@ async function exchangeCodeForToken(code: string): Promise<any | null> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        grant_type: 'authorization_code',
-        code,
-        client_id: OAUTH_CLIENT_ID,
-        client_secret: OAUTH_CLIENT_SECRET,
+        grant_type: 'authorization_code', code,
+        client_id: OAUTH_CLIENT_ID, client_secret: OAUTH_CLIENT_SECRET,
         redirect_uri: OAUTH_REDIRECT_URI,
       }),
       signal: AbortSignal.timeout(15000),
     });
-    if (!resp.ok) {
-      const err = await resp.text();
-      console.error('Token exchange failed:', err);
-      return null;
-    }
+    if (!resp.ok) return null;
     return await resp.json();
-  } catch (e: any) {
-    console.error('Token exchange error:', e.message);
-    return null;
-  }
+  } catch { return null; }
 }
 
 async function getUserInfo(accessToken: string): Promise<any | null> {
@@ -79,22 +64,19 @@ async function getUserInfo(accessToken: string): Promise<any | null> {
     });
     if (!resp.ok) return null;
     return await resp.json();
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
-async function createOrLoginUser(legionUser: any): Promise<{ success: boolean; token?: string; error?: string }> {
+async function createOrLoginUser(username: string, email?: string): Promise<{ success: boolean; token?: string; error?: string }> {
   try {
-    const username = legionUser.username || legionUser.email?.split('@')[0] || 'legion_user';
-    const email = legionUser.email || `${username}@deathlegion.local`;
+    const cleanUsername = username.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+    const userEmail = email || `${cleanUsername}@deathlegion.dev`;
     const password = 'DeathLegion2025!';
 
     const phpScript = `<?php
 require '/home/daytona/pterodactyl-panel/vendor/autoload.php';
 $app = require '/home/daytona/pterodactyl-panel/bootstrap/app.php';
 $app->make(Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap();
-
 use Pterodactyl\\Models\\User;
 use Pterodactyl\\Models\\Server;
 use Pterodactyl\\Models\\Egg;
@@ -107,8 +89,8 @@ use Pterodactyl\\Services\\Users\\UserCreationService;
 use Illuminate\\Support\\Facades\\Crypt;
 use Illuminate\\Support\\Str;
 
-$username = '${username}';
-$email = '${email}';
+$username = '${cleanUsername}';
+$email = '${userEmail}';
 $password = '${password}';
 
 $user = User::where('username', $username)->orWhere('email', $email)->first();
@@ -170,9 +152,10 @@ $token = Str::random(32);
 ApiKey::where('user_id', $user->id)->where('key_type', 1)->delete();
 $key = new ApiKey();
 $key->user_id = $user->id; $key->key_type = 1; $key->identifier = $identifier;
-$key->token = Crypt::encrypt($token); $key->memo = 'legion-oauth';
+$key->token = Crypt::encrypt($token); $key->memo = 'legion-auth';
 $key->allowed_ips = null; $key->expires_at = null; $key->save();
 echo "TOKEN:" . $identifier . $token . "\\n";
+echo "USERNAME:" . $user->username . "\\n";
 echo "DONE\\n";
 `;
 
@@ -183,10 +166,10 @@ echo "DONE\\n";
     );
 
     let token = '';
+    let finalUsername = cleanUsername;
     for (const line of result.trim().split('\n')) {
-      if (line.trim().startsWith('TOKEN:')) {
-        token = line.trim().substring(6);
-      }
+      if (line.trim().startsWith('TOKEN:')) token = line.trim().substring(6);
+      if (line.trim().startsWith('USERNAME:')) finalUsername = line.trim().substring(9);
     }
     if (token) return { success: true, token };
     return { success: false, error: result };
@@ -201,26 +184,193 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(204).end();
 
-  // Handle OAuth callback: ?code=...&state=...
+  // Handle OAuth callback (for when OAuth is fixed)
   const code = req.query.code as string;
-  const state = req.query.state as string;
-
   if (code) {
-    // OAuth2 callback — exchange code for token, get user info, create Pterodactyl user
     const tokenData = await exchangeCodeForToken(code);
-    if (!tokenData || !tokenData.access_token) {
-      return res.status(400).send(`<!DOCTYPE html><html><body style="background:#080808;color:#e5e5e5;font-family:sans-serif;padding:2rem;text-align:center"><h1 style="color:#ef4444">OAuth Error</h1><p>Failed to exchange authorization code.</p><p><a href="/legion-auth" style="color:#e89060">Try again</a></p></body></html>`);
+    if (tokenData && tokenData.access_token) {
+      const userInfo = await getUserInfo(tokenData.access_token);
+      if (userInfo) {
+        const result = await createOrLoginUser(userInfo.username, userInfo.email);
+        if (result.success) {
+          const username = userInfo.username || 'legion_user';
+          return res.status(200).send(renderSuccessPage(username, userInfo.memberNumber));
+        }
+      }
     }
+    // OAuth failed — redirect to the manual flow
+    return res.redirect(302, '/legion-auth?error=oauth_failed');
+  }
 
-    const userInfo = await getUserInfo(tokenData.access_token);
-    if (!userInfo) {
-      return res.status(400).send(`<!DOCTYPE html><html><body style="background:#080808;color:#e5e5e5;font-family:sans-serif;padding:2rem;text-align:center"><h1 style="color:#ef4444">OAuth Error</h1><p>Failed to get user info.</p><p><a href="/legion-auth" style="color:#e89060">Try again</a></p></body></html>`);
+  // POST: Create user from username
+  if (req.method === 'POST') {
+    const { username, email } = req.body || {};
+    if (!username || username.length < 3) {
+      return res.status(400).json({ error: 'Username must be at least 3 characters' });
     }
-
-    const result = await createOrLoginUser(userInfo);
+    const result = await createOrLoginUser(username, email);
     if (result.success && result.token) {
-      const username = userInfo.username || userInfo.email?.split('@')[0] || 'legion_user';
-      return res.status(200).send(`<!DOCTYPE html>
+      return res.status(200).json({
+        success: true,
+        username: username.toLowerCase().replace(/[^a-z0-9_-]/g, ''),
+        panelUrl: 'https://deathlegionpanel.vercel.app',
+        login: { username: username.toLowerCase().replace(/[^a-z0-9_-]/g, ''), password: 'DeathLegion2025!' },
+      });
+    }
+    return res.status(500).json({ error: result.error || 'Failed to create user' });
+  }
+
+  // GET: Show the page
+  const oauthError = req.query.error === 'oauth_failed';
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Death Legion — Connect</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;500;600;700&display=swap');
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'Inter',sans-serif; background:#080808; color:#e5e5e5; min-height:100vh; display:flex; align-items:center; justify-content:center; }
+    .container { max-width:480px; width:100%; padding:2rem; }
+    .card { background:rgba(20,20,20,0.9); border:1px solid rgba(188,110,60,0.2); border-radius:20px; padding:2.5rem; text-align:center; }
+    .logo { font-family:'Cinzel',serif; font-size:1.8rem; font-weight:900; background:linear-gradient(135deg,#bc6e3c,#e89060); -webkit-background-clip:text; -webkit-text-fill-color:transparent; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:0.5rem; }
+    .subtitle { color:#666; font-size:0.85rem; margin-bottom:2rem; }
+    .btn { display:inline-block; padding:0.9rem 2rem; background:linear-gradient(135deg,#bc6e3c,#e89060); color:#fff; text-decoration:none; border-radius:12px; font-weight:600; font-size:1rem; border:none; cursor:pointer; transition:all 0.2s; width:100%; }
+    .btn:hover { transform:translateY(-2px); box-shadow:0 8px 20px rgba(188,110,60,0.3); }
+    .btn:disabled { opacity:0.6; cursor:not-allowed; transform:none; }
+    .btn-outline { background:transparent; border:1px solid rgba(188,110,60,0.3); color:#e89060; margin-top:1rem; }
+    .divider { display:flex; align-items:center; margin:1.5rem 0; color:#555; font-size:0.8rem; }
+    .divider::before, .divider::after { content:''; flex:1; height:1px; background:rgba(255,255,255,0.08); }
+    .divider span { padding:0 0.75rem; }
+    .form-group { margin-bottom:1rem; text-align:left; }
+    .form-group label { display:block; font-size:0.85rem; color:#aaa; margin-bottom:0.4rem; }
+    .form-group input { width:100%; padding:0.75rem 1rem; background:rgba(15,15,15,0.8); border:1px solid rgba(255,255,255,0.08); border-radius:8px; color:#fff; font-size:0.95rem; font-family:'Inter',sans-serif; }
+    .form-group input:focus { outline:none; border-color:#bc6e3c; box-shadow:0 0 0 3px rgba(188,110,60,0.15); }
+    .status { margin-top:1rem; padding:0.8rem; border-radius:8px; font-size:0.85rem; display:none; }
+    .status.success { display:block; background:rgba(34,197,94,0.1); color:#22c55e; border:1px solid rgba(34,197,94,0.2); }
+    .status.error { display:block; background:rgba(239,68,68,0.1); color:#ef4444; border:1px solid rgba(239,68,68,0.2); }
+    .creds { margin-top:1rem; padding:1rem; background:rgba(15,15,15,0.8); border:1px solid rgba(255,255,255,0.08); border-radius:10px; font-family:monospace; font-size:0.85rem; text-align:left; display:none; }
+    .creds.show { display:block; }
+    .creds div { margin:0.3rem 0; }
+    .creds .l { color:#888; }
+    .creds .v { color:#e89060; }
+    .spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,0.2); border-top-color:#fff; border-radius:50%; animation:spin 0.8s linear infinite; margin-right:0.5rem; vertical-align:middle; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .info { margin-top:1.5rem; color:#666; font-size:0.8rem; line-height:1.6; }
+    .info a { color:#e89060; text-decoration:none; }
+    .alert { background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.2); color:#f59e0b; padding:0.75rem 1rem; border-radius:8px; font-size:0.8rem; margin-bottom:1rem; display:none; }
+    .alert.show { display:block; }
+    .beta-badge { position:fixed; top:12px; right:12px; z-index:999; background:linear-gradient(135deg,#bc6e3c,#e89060); color:#fff; padding:4px 12px; border-radius:20px; font-size:0.7rem; font-weight:700; text-transform:uppercase; box-shadow:0 2px 10px rgba(188,110,60,0.3); pointer-events:none; }
+    .steps { text-align:left; margin:1rem 0; font-size:0.85rem; color:#888; line-height:1.8; }
+    .steps div { padding:0.2rem 0; }
+    .steps .num { display:inline-block; width:20px; height:20px; background:rgba(188,110,60,0.2); color:#e89060; border-radius:50%; text-align:center; line-height:20px; font-size:0.75rem; margin-right:0.5rem; }
+  </style>
+</head>
+<body>
+  <div class="beta-badge">BETA</div>
+  <div class="container">
+    <div class="card">
+      <div class="logo">Death Legion</div>
+      <div class="subtitle">Bot Hosting Platform</div>
+
+      ${oauthError ? '<div class="alert show">OAuth login failed. Use the manual login below.</div>' : ''}
+
+      <div class="steps">
+        <div><span class="num">1</span> Click "Open Death Legion" to register/login</div>
+        <div><span class="num">2</span> Come back and enter your Death Legion username</div>
+        <div><span class="num">3</span> Click "Create My Account" to get your bot servers</div>
+      </div>
+
+      <a href="${LEGION_AUTH_URL}" target="_blank" class="btn">Open Death Legion</a>
+
+      <div class="divider"><span>OR ENTER YOUR USERNAME</span></div>
+
+      <form id="legionForm" onsubmit="return false">
+        <div class="form-group">
+          <label>Death Legion Username</label>
+          <input type="text" id="dlUsername" placeholder="your DL username" required minlength="3" />
+        </div>
+        <div class="form-group">
+          <label>Email (optional)</label>
+          <input type="email" id="dlEmail" placeholder="your@email.com" />
+        </div>
+        <button type="submit" class="btn" id="createBtn" onclick="createAccount()">
+          Create My Account
+        </button>
+      </form>
+
+      <div class="status" id="status"></div>
+      <div class="creds" id="creds"></div>
+
+      <div class="divider"><span>OR</span></div>
+
+      <a href="/apply" class="btn btn-outline">Apply Without Legion ID</a>
+
+      <div class="info">
+        <p>Your Death Legion ID works across all Legion apps.</p>
+        <p style="margin-top:0.5rem">Don't have an ID? <a href="${LEGION_AUTH_URL}" target="_blank">Register at Death Legion</a></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function createAccount() {
+      const btn = document.getElementById('createBtn');
+      const status = document.getElementById('status');
+      const creds = document.getElementById('creds');
+      const username = document.getElementById('dlUsername').value.trim();
+      const email = document.getElementById('dlEmail').value.trim();
+
+      if (!username || username.length < 3) {
+        status.className = 'status error';
+        status.textContent = 'Please enter your Death Legion username (min 3 characters)';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Creating your account...';
+      status.className = 'status';
+
+      try {
+        const res = await fetch('/api/legion-auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, email: email || undefined })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          status.className = 'status success';
+          status.textContent = 'Welcome, ' + data.username + '! Your bot servers are ready.';
+          creds.className = 'creds show';
+          creds.innerHTML =
+            '<div><span class="l">Panel URL:</span> <span class="v">' + data.panelUrl + '</span></div>' +
+            '<div><span class="l">Username:</span> <span class="v">' + data.login.username + '</span></div>' +
+            '<div><span class="l">Password:</span> <span class="v">' + data.login.password + '</span></div>' +
+            '<div style="margin-top:0.8rem"><a href="' + data.panelUrl + '" style="color:#e89060">Go to Panel →</a></div>';
+          btn.textContent = 'Done!';
+        } else {
+          status.className = 'status error';
+          status.textContent = 'Error: ' + (data.error || 'Unknown error');
+          btn.disabled = false;
+          btn.textContent = 'Create My Account';
+        }
+      } catch (e) {
+        status.className = 'status error';
+        status.textContent = 'Error: ' + e.message;
+        btn.disabled = false;
+        btn.textContent = 'Create My Account';
+      }
+    }
+  </script>
+</body>
+</html>`;
+  return res.status(200).send(html);
+}
+
+function renderSuccessPage(username: string, memberNumber?: string): string {
+  return `<!DOCTYPE html>
 <html><head><title>Death Legion — Connected</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;500;600;700&display=swap');
@@ -246,120 +396,11 @@ p{color:#aaa;margin-bottom:1.5rem;line-height:1.6}
     <div><span class="l">Panel URL:</span> <span class="v">deathlegionpanel.vercel.app</span></div>
     <div><span class="l">Username:</span> <span class="v">${username}</span></div>
     <div><span class="l">Password:</span> <span class="v">DeathLegion2025!</span></div>
-    <div><span class="l">Member #:</span> <span class="v">${userInfo.memberNumber || 'N/A'}</span></div>
+    ${memberNumber ? `<div><span class="l">Member #:</span> <span class="v">${memberNumber}</span></div>` : ''}
   </div>
   <a href="/" class="btn">Go to Panel →</a>
 </div>
-</body></html>`);
-    }
-    return res.status(500).send(`<!DOCTYPE html><html><body style="background:#080808;color:#e5e5e5;font-family:sans-serif;padding:2rem;text-align:center"><h1 style="color:#ef4444">Error</h1><p>${result.error || 'Failed to create user'}</p><p><a href="/legion-auth" style="color:#e89060">Try again</a></p></body></html>`);
-  }
-
-  // GET: Show the Legion Auth page with "Connect with Death Legion" button
-  if (req.method === 'GET') {
-    // If no OAuth client ID configured, show setup message
-    if (!OAUTH_CLIENT_ID) {
-      return res.status(200).send(`<!DOCTYPE html>
-<html><head><title>Death Legion — Connect</title>
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;500;600;700&display=swap');
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',sans-serif;background:#080808;color:#e5e5e5;min-height:100vh;display:flex;align-items:center;justify-content:center}
-.card{background:rgba(20,20,20,0.9);border:1px solid rgba(188,110,60,0.2);border-radius:20px;padding:2.5rem;max-width:480px;width:90%;text-align:center}
-.logo{font-family:'Cinzel',serif;font-size:1.8rem;font-weight:900;background:linear-gradient(135deg,#bc6e3c,#e89060);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:0.5rem}
-.subtitle{color:#666;font-size:0.85rem;margin-bottom:2rem}
-.btn{display:inline-block;padding:0.85rem 2rem;background:linear-gradient(135deg,#bc6e3c,#e89060);color:#fff;text-decoration:none;border-radius:12px;font-weight:600;font-size:1rem;transition:all 0.2s;margin:0.5rem}
-.btn:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(188,110,60,0.3)}
-.btn-outline{background:transparent;border:1px solid rgba(188,110,60,0.3);color:#e89060}
-.info{margin-top:1.5rem;color:#666;font-size:0.8rem;line-height:1.6}
-.info a{color:#e89060;text-decoration:none}
-</style></head><body>
-<div class="card">
-  <div class="logo">Death Legion</div>
-  <div class="subtitle">Bot Hosting Platform</div>
-  <p style="color:#aaa;margin-bottom:1.5rem;font-size:0.9rem">Login with your Death Legion ID or apply directly.</p>
-  <a href="/apply" class="btn">Apply Now</a>
-  <a href="/" class="btn btn-outline">Go to Panel</a>
-  <div class="info">
-    <p>Death Legion OAuth is being configured.</p>
-    <p style="margin-top:0.5rem">Use the apply form to get instant access.</p>
-  </div>
-</div>
-</body></html>`);
-    }
-
-    // Generate state for CSRF protection
-    const state = Math.random().toString(36).slice(2);
-    const authUrl = `${LEGION_AUTH_URL}/api/oauth/authorize?response_type=code&client_id=${OAUTH_CLIENT_ID}&redirect_uri=${encodeURIComponent(OAUTH_REDIRECT_URI)}&scope=profile&state=${state}`;
-
-    const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Death Legion — Connect</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;500;600;700&display=swap');
-    * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family:'Inter',sans-serif; background:#080808; color:#e5e5e5; min-height:100vh; display:flex; align-items:center; justify-content:center; }
-    .container { max-width:480px; width:100%; padding:2rem; }
-    .card { background:rgba(20,20,20,0.9); border:1px solid rgba(188,110,60,0.2); border-radius:20px; padding:2.5rem; text-align:center; }
-    .logo { font-family:'Cinzel',serif; font-size:1.8rem; font-weight:900; background:linear-gradient(135deg,#bc6e3c,#e89060); -webkit-background-clip:text; -webkit-text-fill-color:transparent; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:0.5rem; }
-    .subtitle { color:#666; font-size:0.85rem; margin-bottom:2rem; }
-    .btn { display:inline-block; padding:0.9rem 2rem; background:linear-gradient(135deg,#bc6e3c,#e89060); color:#fff; text-decoration:none; border-radius:12px; font-weight:600; font-size:1rem; border:none; cursor:pointer; transition:all 0.2s; }
-    .btn:hover { transform:translateY(-2px); box-shadow:0 8px 20px rgba(188,110,60,0.3); }
-    .btn-outline { background:transparent; border:1px solid rgba(188,110,60,0.3); color:#e89060; margin-top:1rem; }
-    .info { margin-top:1.5rem; color:#666; font-size:0.8rem; line-height:1.6; }
-    .info a { color:#e89060; text-decoration:none; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="card">
-      <div class="logo">Death Legion</div>
-      <div class="subtitle">Bot Hosting Platform</div>
-      <p style="color:#aaa;margin-bottom:1.5rem;font-size:0.9rem">Connect with your Death Legion ID to get instant access to your bot servers.</p>
-      <a href="${authUrl}" class="btn">Connect with Death Legion</a>
-      <br>
-      <a href="/apply" class="btn btn-outline">Apply without Legion ID</a>
-      <div class="info">
-        <p>Your Death Legion ID works across all Legion apps.</p>
-        <p style="margin-top:0.5rem">Don't have an ID? <a href="${LEGION_AUTH_URL}" target="_blank">Register here</a></p>
-      </div>
-    </div>
-  </div>
-</body>
-</html>`;
-    return res.status(200).send(html);
-  }
-
-  // POST: Create/login user from Legion Auth user data (for popup flow)
-  if (req.method === 'POST') {
-    const { user: legionUser } = req.body || {};
-    if (!legionUser || !legionUser.email) {
-      return res.status(400).json({ error: 'Missing user data' });
-    }
-    const result = await createOrLoginUser(legionUser);
-    if (result.success && result.token) {
-      return res.status(200).json({
-        success: true,
-        user: {
-          username: legionUser.username || legionUser.email.split('@')[0],
-          email: legionUser.email,
-          role: legionUser.role,
-          memberNumber: legionUser.memberNumber,
-        },
-        panelUrl: 'https://deathlegionpanel.vercel.app',
-        login: {
-          username: legionUser.username || legionUser.email.split('@')[0],
-          password: 'DeathLegion2025!',
-        },
-      });
-    }
-    return res.status(500).json({ error: result.error || 'Failed to create user' });
-  }
-
-  return res.status(405).json({ error: 'Method not allowed' });
+</body></html>`;
 }
 
 export const config = {
