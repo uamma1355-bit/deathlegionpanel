@@ -3,6 +3,32 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 const DAYTONA_PANEL_URL = 'https://8000-16551277-c744-47d8-bbf4-f681442b1691.daytonaproxy01.eu';
 const DAYTONA_HOST = '8000-16551277-c744-47d8-bbf4-f681442b1691.daytonaproxy01.eu';
 
+// Curated image pools (direct Unsplash CDN URLs — always reachable)
+const LOGIN_BG_IMAGE = 'https://images.unsplash.com/photo-1535223289827-42f1e9919769?w=1920&q=80&auto=format';
+const NAV_LOGO_URL = 'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=120&h=120&fit=crop&q=80';
+const SERVER_BANNER_IMAGES = [
+  'https://images.unsplash.com/photo-1518770660439-4636190af475?w=600&q=80',
+  'https://images.unsplash.com/photo-1542831371-29b0f74f9713?w=600&q=80',
+  'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=600&q=80',
+  'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600&q=80',
+  'https://images.unsplash.com/photo-1535223289827-42f1e9919769?w=600&q=80',
+  'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=600&q=80',
+  'https://images.unsplash.com/photo-1556438064-2d7646166914?w=600&q=80',
+  'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=600&q=80',
+  'https://images.unsplash.com/photo-1573164713988-8665fc963095?w=600&q=80',
+  'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=600&q=80',
+  'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&q=80',
+  'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=600&q=80',
+  'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=600&q=80',
+  'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=600&q=80',
+  'https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?w=600&q=80',
+  'https://images.unsplash.com/photo-1614728263952-84ea256f9679?w=600&q=80',
+  'https://images.unsplash.com/photo-1517502884422-41eaead166d4?w=600&q=80',
+  'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&q=80',
+  'https://images.unsplash.com/photo-1502134249126-9f3755a50d78?w=600&q=80',
+  'https://images.unsplash.com/photo-1527185475247-e9bcd1f4d4a4?w=600&q=80',
+];
+
 function buildTargetUrl(req: VercelRequest): string {
   return DAYTONA_PANEL_URL + (req.url || '/');
 }
@@ -158,6 +184,39 @@ body {
   background-attachment: fixed !important;
 }
 
+/* Login page special background */
+body.dl-login-page {
+  background-image: linear-gradient(135deg, rgba(20,8,4,0.7) 0%, rgba(8,4,12,0.85) 100%), url('${LOGIN_BG_IMAGE}') !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-attachment: fixed !important;
+}
+body.dl-login-page .AuthFormCard,
+body.dl-login-page form,
+body.dl-login-page [class*="auth"],
+body.dl-login-page [class*="Auth"],
+body.dl-login-page [class*="login"],
+body.dl-login-page [class*="Login"] {
+  backdrop-filter: blur(14px) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
+  background: rgba(15,12,10,0.78) !important;
+  border: 1px solid rgba(188,110,60,0.3) !important;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.65), 0 0 80px rgba(188,110,60,0.12) !important;
+  border-radius: 12px !important;
+}
+body.dl-login-page input[type="text"],
+body.dl-login-page input[type="password"],
+body.dl-login-page input[type="email"] {
+  background: rgba(8,8,8,0.6) !important;
+  border: 1px solid rgba(188,110,60,0.2) !important;
+}
+body.dl-login-page input[type="text"]:focus,
+body.dl-login-page input[type="password"]:focus,
+body.dl-login-page input[type="email"]:focus {
+  border-color: rgba(188,110,60,0.6) !important;
+  box-shadow: 0 0 0 3px rgba(188,110,60,0.15) !important;
+}
+
 /* BETA badge */
 .dl-beta-badge {
   position: fixed; top: 12px; right: 12px; z-index: 99999;
@@ -234,6 +293,77 @@ body {
   font-family: 'Inter', sans-serif; color: #e89060; font-weight: 600;
 }
 .dl-credit-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; }
+
+/* Nav bar logo image */
+.dl-nav-logo {
+  width: 36px; height: 36px; border-radius: 10px;
+  object-fit: cover;
+  border: 1px solid rgba(188,110,60,0.4);
+  box-shadow: 0 0 12px rgba(188,110,60,0.3);
+  transition: all 0.2s;
+  margin-right: 4px;
+  animation: dlLogoPulse 3s ease-in-out infinite;
+  cursor: pointer;
+}
+@keyframes dlLogoPulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(188,110,60,0.3); }
+  50% { box-shadow: 0 0 18px rgba(188,110,60,0.55); }
+}
+.dl-nav-logo:hover {
+  transform: scale(1.1) rotate(-4deg);
+  border-color: rgba(188,110,60,0.8);
+}
+
+/* Server card randomized banner images */
+.dl-server-banner {
+  height: 72px;
+  width: 100%;
+  background-size: cover !important;
+  background-position: center !important;
+  position: relative;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(188,110,60,0.15);
+  transition: all 0.3s;
+}
+.dl-server-banner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(15,15,15,0.15) 0%, rgba(15,15,15,0.55) 100%);
+  border-radius: 6px;
+  pointer-events: none;
+}
+.dl-server-banner::before {
+  content: 'DL';
+  position: absolute;
+  top: 6px; right: 8px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.65rem;
+  font-weight: 900;
+  color: rgba(232,144,96,0.85);
+  letter-spacing: 0.1em;
+  z-index: 2;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+}
+/* Hover glow on server cards that have a banner */
+:has(> .dl-server-banner) {
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+:has(> .dl-server-banner):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 0 22px rgba(188,110,60,0.18);
+}
+:has(> .dl-server-banner):hover > .dl-server-banner {
+  border-color: rgba(188,110,60,0.55);
+  transform: scale(1.015);
+}
+
+/* Extra: Pterodactyl sidebar header logo override */
+.navbar-brand img, .main-header .logo img, [class*="logo"] img {
+  filter: drop-shadow(0 0 6px rgba(188,110,60,0.4));
+}
 </style>
 
 <!-- BETA badge -->
@@ -244,6 +374,7 @@ body {
 
 <!-- Floating nav icons -->
 <div class="dl-nav-icons">
+  <img src="${NAV_LOGO_URL}" class="dl-nav-logo" alt="Death Legion" title="Death Legion Panel" />
   <a href="/" class="dl-nav-icon" title="Panel">
     <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
     <span class="tooltip">Panel</span>
@@ -320,6 +451,106 @@ body {
   }
   var observer = new MutationObserver(function() { injectLegionAuth(); });
   observer.observe(document.body, { childList: true, subtree: true });
+  // === Login page detection (special bg) ===
+  function detectLoginPage() {
+    var path = window.location.pathname.toLowerCase();
+    var isLogin = path.indexOf('/auth/login') !== -1
+               || path === '/login'
+               || (path.indexOf('/login') !== -1 && path.indexOf('/admin') === -1 && path.indexOf('/dashboard') === -1);
+    if (isLogin) {
+      document.body.classList.add('dl-login-page');
+    } else {
+      document.body.classList.remove('dl-login-page');
+    }
+  }
+
+  // === Randomized server banner images (one per server, deterministic by name) ===
+  var SERVER_BANNERS = ${JSON.stringify(SERVER_BANNER_IMAGES)};
+  function hashStr(s) {
+    var h = 0;
+    for (var i = 0; i < s.length; i++) {
+      h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+    }
+    return Math.abs(h);
+  }
+  function isServerHomeLink(href) {
+    if (!href || href.indexOf('/server/') !== 0) return false;
+    var rest = href.substring(8);
+    if (rest.length === 0) return false;
+    if (rest.indexOf('/') !== -1) return false;
+    return true;
+  }
+  function findServerCard(link) {
+    var parent = link.parentElement;
+    if (parent) {
+      var aSiblings = 0;
+      for (var i = 0; i < parent.children.length; i++) {
+        if (parent.children[i].tagName === 'A') aSiblings++;
+      }
+      if (aSiblings >= 2) {
+        var r0 = link.getBoundingClientRect();
+        if (r0.width > 120 && r0.width < 800) return link;
+      }
+    }
+    var el = link;
+    for (var i = 0; i < 5; i++) {
+      if (!el || !el.parentElement) return null;
+      var p = el.parentElement;
+      if (p.children.length >= 2) {
+        var similar = 0;
+        for (var j = 0; j < p.children.length; j++) {
+          if (p.children[j].tagName === el.tagName) similar++;
+        }
+        if (similar >= 2) {
+          var r = el.getBoundingClientRect();
+          if (r.width > 120 && r.width < 800) return el;
+        }
+      }
+      el = p;
+    }
+    return null;
+  }
+  function injectServerBanners() {
+    var links = document.querySelectorAll('a[href*="/server/"]');
+    links.forEach(function(link) {
+      var href = link.getAttribute('href') || '';
+      if (!isServerHomeLink(href)) return;
+      var card = findServerCard(link);
+      if (!card || card.dataset.dlBanner === '1') return;
+      var rect = card.getBoundingClientRect();
+      if (rect.width < 150) return;
+      card.dataset.dlBanner = '1';
+      var name = (link.textContent || '').trim() || href;
+      var seed = hashStr(name + '|' + href);
+      var img = SERVER_BANNERS[seed % SERVER_BANNERS.length];
+      var banner = document.createElement('div');
+      banner.className = 'dl-server-banner';
+      banner.style.backgroundImage = 'url("' + img + '")';
+      card.insertBefore(banner, card.firstChild);
+    });
+  }
+
+  // === Run all dynamic injections ===
+  detectLoginPage();
+  injectServerBanners();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+      detectLoginPage();
+      injectServerBanners();
+    });
+  }
+  var dlObserver = new MutationObserver(function() {
+    detectLoginPage();
+    injectServerBanners();
+  });
+  if (document.body) {
+    dlObserver.observe(document.body, { childList: true, subtree: true });
+  }
+  setInterval(function() {
+    detectLoginPage();
+    injectServerBanners();
+  }, 1500);
+
   setInterval(injectLegionAuth, 1000);
   setInterval(loadCredits, 5000);
   setTimeout(loadCredits, 2000);
