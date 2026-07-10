@@ -347,6 +347,31 @@ body.dl-login-page input[type="email"]:focus {
   z-index: 2;
   text-shadow: 0 1px 4px rgba(0,0,0,0.9);
 }
+/* When applied directly on a server-card <a> (background-image mode) */
+a[data-dl-banner="1"] {
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  border: 1px solid rgba(188,110,60,0.18) !important;
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s !important;
+}
+a[data-dl-banner="1"]:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 0 22px rgba(188,110,60,0.18);
+  border-color: rgba(188,110,60,0.55) !important;
+}
+.dl-card-badge {
+  position: absolute;
+  top: 8px; left: 10px;
+  z-index: 5;
+  font-family: 'Cinzel', serif;
+  font-size: 0.6rem;
+  font-weight: 900;
+  color: rgba(232,144,96,0.85);
+  letter-spacing: 0.12em;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.95);
+  pointer-events: none;
+}
 /* Hover glow on server cards that have a banner */
 :has(> .dl-server-banner) {
   transition: transform 0.2s, box-shadow 0.2s;
@@ -465,6 +490,8 @@ body.dl-login-page input[type="email"]:focus {
   }
 
   // === Randomized server banner images (one per server, deterministic by name) ===
+  // Pterodactyl dashboard renders each server as <a href="/server/{id}" class="group relative block ...">
+  // We apply the banner as a background-image directly on the <a> itself, with a dark overlay.
   var SERVER_BANNERS = ${JSON.stringify(SERVER_BANNER_IMAGES)};
   function hashStr(s) {
     var h = 0;
@@ -480,53 +507,45 @@ body.dl-login-page input[type="email"]:focus {
     if (rest.indexOf('/') !== -1) return false;
     return true;
   }
-  function findServerCard(link) {
-    var parent = link.parentElement;
-    if (parent) {
-      var aSiblings = 0;
-      for (var i = 0; i < parent.children.length; i++) {
-        if (parent.children[i].tagName === 'A') aSiblings++;
-      }
-      if (aSiblings >= 2) {
-        var r0 = link.getBoundingClientRect();
-        if (r0.width > 120 && r0.width < 800) return link;
-      }
-    }
-    var el = link;
-    for (var i = 0; i < 5; i++) {
-      if (!el || !el.parentElement) return null;
-      var p = el.parentElement;
-      if (p.children.length >= 2) {
-        var similar = 0;
-        for (var j = 0; j < p.children.length; j++) {
-          if (p.children[j].tagName === el.tagName) similar++;
-        }
-        if (similar >= 2) {
-          var r = el.getBoundingClientRect();
-          if (r.width > 120 && r.width < 800) return el;
-        }
-      }
-      el = p;
-    }
-    return null;
+  function extractServerName(card) {
+    var h2 = card.querySelector('h2');
+    if (h2 && h2.textContent) return h2.textContent.trim();
+    var p = card.querySelector('p, .name, [class*="name"]');
+    if (p && p.textContent) return p.textContent.trim();
+    return '';
   }
   function injectServerBanners() {
-    var links = document.querySelectorAll('a[href*="/server/"]');
+    var links = document.querySelectorAll('a[href^="/server/"]');
     links.forEach(function(link) {
       var href = link.getAttribute('href') || '';
       if (!isServerHomeLink(href)) return;
-      var card = findServerCard(link);
-      if (!card || card.dataset.dlBanner === '1') return;
-      var rect = card.getBoundingClientRect();
-      if (rect.width < 150) return;
-      card.dataset.dlBanner = '1';
-      var name = (link.textContent || '').trim() || href;
+      if (link.dataset.dlBanner === '1') return;
+      // Skip tiny links (sidebar, breadcrumb, etc.) — real cards are >250px wide
+      var rect = link.getBoundingClientRect();
+      if (rect.width < 250) return;
+      // Skip links that don't look like cards (no children, or only text content)
+      if (link.children.length < 2) return;
+      link.dataset.dlBanner = '1';
+      var name = extractServerName(link) || href;
       var seed = hashStr(name + '|' + href);
       var img = SERVER_BANNERS[seed % SERVER_BANNERS.length];
-      var banner = document.createElement('div');
-      banner.className = 'dl-server-banner';
-      banner.style.backgroundImage = 'url("' + img + '")';
-      card.insertBefore(banner, card.firstChild);
+      // Apply as background image with dark gradient overlay so text stays readable
+      link.style.backgroundImage =
+        'linear-gradient(135deg, rgba(15,12,10,0.86) 0%, rgba(20,12,8,0.94) 100%), url("' + img + '")';
+      link.style.backgroundSize = 'cover';
+      link.style.backgroundPosition = 'center';
+      link.style.backgroundRepeat = 'no-repeat';
+      // Ensure relative positioning for overlay layering
+      if (!link.style.position || link.style.position === 'static') {
+        link.style.position = 'relative';
+      }
+      // Add a small DL badge in the top-left corner if not already present
+      if (!link.querySelector('.dl-card-badge')) {
+        var badge = document.createElement('div');
+        badge.className = 'dl-card-badge';
+        badge.textContent = 'DL';
+        link.insertBefore(badge, link.firstChild);
+      }
     });
   }
 
