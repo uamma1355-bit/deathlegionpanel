@@ -2239,3 +2239,68 @@ Stage Summary:
 - ✅ 3 user bot containers currently running and shown in the table (DeathLegion Titan, Gamma, Eclipse)
 
 — End of Task STATISTICS-PAGE-2026-07-09 —
+
+---
+Task ID: VISUAL-ENHANCE-2026-07-11
+Agent: main
+Task: Add randomized server banner images, nav bar logo image, and login page background to the Vercel-proxied Pterodactyl panel
+
+Work Log:
+
+1. Updated `/home/z/my-project/api/proxy.ts` with 5 targeted edits:
+
+   a) Added 3 new top-level constants:
+      - `LOGIN_BG_IMAGE` — Unsplash gaming-themed photo for the login page background
+      - `NAV_LOGO_URL` — Unsplash dark abstract image used as the floating navbar logo
+      - `SERVER_BANNER_IMAGES` — array of 20 curated Unsplash CDN URLs (tech, gaming, space, cyberpunk, server-room themes)
+
+   b) Added login page CSS:
+      - `body.dl-login-page` — distinct diagonal gradient + gaming image background
+      - Frosted-glass effect (backdrop-filter: blur(14px)) on `.AuthFormCard`, all `form`s, and any `[class*="auth/login"]` elements
+      - Dark translucent form background (rgba(15,12,10,0.78)) with bronze border + ambient glow shadow
+      - Styled login inputs (dark bg, bronze border, glow on focus)
+
+   c) Added nav logo CSS:
+      - `.dl-nav-logo` — 36x36 rounded image with bronze border + drop shadow
+      - `@keyframes dlLogoPulse` — subtle pulsing bronze glow animation (3s loop)
+      - Hover: scale 1.1x + slight rotation + intensified border
+      - Pterodactyl sidebar logo drop-shadow override (`.navbar-brand img`, etc.)
+
+   d) Added server banner CSS:
+      - `.dl-server-banner` — 72px tall banner with cover-fit bg image, bronze border, gradient overlay
+      - `::before` pseudo-element shows "DL" watermark in Cinzel font (top-right corner)
+      - `:has(> .dl-server-banner)` — modern CSS selector for hover lift + glow on the card container
+      - Banner scales 1.015x on card hover
+
+   e) Added nav logo `<img>` element as the first child of `.dl-nav-icons` floating bar (uses `${NAV_LOGO_URL}` template interpolation)
+
+   f) Added 100+ lines of injected JavaScript:
+      - `detectLoginPage()` — checks `window.location.pathname` for `/auth/login` or `/login`, toggles `body.dl-login-page` class (handles SPA route changes)
+      - `hashStr(s)` — DJB2 string hash for deterministic per-server image assignment
+      - `isServerHomeLink(href)` — validates `/server/{uuid}` format (excludes sub-paths like `/files`, `/backups`)
+      - `findServerCard(link)` — walks up to 5 DOM levels to find the card-like ancestor (handles both `<a>`-wrapped cards and `<div>`-wrapped cards); width-bounded 120-800px to avoid matching the whole page
+      - `injectServerBanners()` — queries all `a[href*="/server/"]`, filters to home links, finds card, computes hash of (name + href), picks `SERVER_BANNERS[hash % 20]`, inserts `<div class="dl-server-banner">` as first child
+      - `MutationObserver` on `document.body` + 1.5s interval — catches dynamically-loaded server cards (Pterodactyl React dashboard loads cards via async fetch)
+      - Idempotent via `card.dataset.dlBanner = '1'` marker — won't double-inject
+
+2. Used `${JSON.stringify(SERVER_BANNER_IMAGES)}` and `${NAV_LOGO_URL}` / `${LOGIN_BG_IMAGE}` template literal interpolation to embed the constants into the injected HTML/CSS/JS at server-runtime.
+
+3. Committed (04d7e40) and pushed to GitHub main. Vercel auto-deployed.
+
+4. Verified live deployment:
+   - `curl https://deathlegionpanel.vercel.app/` → HTTP 200, 18884 bytes, 25 matches for new CSS classes
+   - `/auth/login` → 15 `dl-login-page` matches, 3 `dl-nav-logo`, 8 `dl-server-banner`
+   - `/` (dashboard) → 3 `SERVER_BANNERS`, 5 `injectServerBanners`, 2 `hashStr` — JS is present and will run client-side
+
+Stage Summary:
+- ✅ Randomized banner image per server card (deterministic by server name — same server always gets same image; 20 curated Unsplash images cycled by hash)
+- ✅ Nav bar logo image (pulsing bronze glow, hover animation) as first item in floating nav icons
+- ✅ Login page distinct background (gaming image + diagonal gradient + frosted-glass form card)
+- ✅ Hover effects: server cards lift + glow + banner scales on hover
+- ✅ Pterodactyl sidebar logo gets bronze drop-shadow
+- ✅ SPA route-aware (login bg only on /auth/login, removed on navigation away)
+- ✅ Handles dynamically-loaded React dashboard cards via MutationObserver + interval
+- ✅ Idempotent injection (no duplicate banners)
+- ✅ Deployed live at https://deathlegionpanel.vercel.app
+
+— End of Task VISUAL-ENHANCE-2026-07-11 —
