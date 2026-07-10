@@ -113,7 +113,7 @@ foreach ($serverNames as $i => $name) {
             'cpu' => 100,
             'feature_limits' => ['databases' => 1, 'allocations' => 2, 'backups' => 1],
             'startup' => $egg->startup,
-            'image' => 'ghcr.io/ptero-eggs/yolks:nodejs_24',
+            'image' => 'ghcr.io/parkervcp/yolks:nodejs_24',
             'skip_scripts' => true,
             'start_on_completion' => false,
         ]);

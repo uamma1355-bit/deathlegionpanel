@@ -82,7 +82,7 @@ if ($existingServers < 2) {
                 'environment' => ['MAIN_FILE' => 'index.js', 'NODE_ARGS' => '', 'NODE_PACKAGES' => '', 'AUTO_UPDATE' => '0', 'GIT_ADDRESS' => '', 'BRANCH' => '', 'USER_UPLOAD' => '1'],
                 'memory' => 512, 'swap' => 0, 'disk' => 1024, 'io' => 500, 'cpu' => 100,
                 'feature_limits' => ['databases' => 1, 'allocations' => 2, 'backups' => 1],
-                'startup' => $egg->startup, 'image' => 'ghcr.io/parkervcp/yolks:nodejs_18',
+                'startup' => $egg->startup, 'image' => 'ghcr.io/parkervcp/yolks:nodejs_24',
                 'skip_scripts' => true, 'start_on_completion' => false,
             ]);
             $volPath = '/var/lib/pterodactyl/volumes/' . $server->uuid;
