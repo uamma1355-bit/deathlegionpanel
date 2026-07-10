@@ -1,25 +1,30 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
-  TOOL_DEFINITIONS, executeTool, parseToolCalls, stripToolCalls, toolCatalogForPrompt,
+  executeTool, parseToolCalls, stripToolCalls, toolCatalogForPrompt,
 } from './_agent-tools';
 
 /**
- * AI Assistant API (Vercel-compatible)
- * ===================================
- * Calls the Z.ai chat completions API directly via fetch — no SDK needed.
- * In agent mode, supports real tool calling against the Pterodactyl panel:
- * list servers, send power, send commands, read/write files, install packages, etc.
- * Tools execute AS the calling user (cookies are forwarded).
+ * AI Assistant API (Vercel → Daytona sandbox → Z.ai internal API)
+ * =================================================================
+ * The Z.ai internal API (internal-api.z.ai) is only reachable from inside
+ * Z.ai's infrastructure. Vercel functions run on Vercel's network, so they
+ * cannot call it directly. Solution: delegate the LLM call to the Daytona
+ * sandbox (which IS inside Z.ai's infra) via the toolbox execute API.
+ *
+ * Flow:
+ *   1. Vercel function receives user message + cookies
+ *   2. Builds messages array with system prompt + history
+ *   3. Calls Daytona toolbox → runs Python script that uses z-ai-web-dev-sdk
+ *   4. Gets LLM response back as JSON
+ *   5. Parses <tool_call> blocks from response
+ *   6. If tool calls: executes them directly (Vercel → Pterodactyl API with
+ *      user's cookies), feeds results back as user messages, loops to step 3
+ *   7. Returns final response + tool log to the UI
  */
 
-// Z.ai credentials — read from env vars, fall back to the local /etc/.z-ai-config
-// session token so the agent works out-of-the-box on this Vercel deployment.
-const ZAI_BASE_URL = process.env.ZAI_BASE_URL || 'https://internal-api.z.ai/v1';
-const ZAI_API_KEY = process.env.ZAI_API_KEY || 'Z.ai';
-const ZAI_TOKEN = process.env.ZAI_TOKEN ||
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiZjc1OWIwMTgtODc4Mi00YzA4LWI4OWQtNTE0NDlkNTAyMTQwIiwiY2hhdF9pZCI6ImNoYXQtZjE5ZmIxM2QtZmU3NS00MzQ5LWFiZTYtNjM2YjVhYjVhN2JlIiwicGxhdGZvcm0iOiJ6YWkifQ.mbCjSld5uqkr_w_6j6z_3kv7iKgUUxt4j2HQV0VP6E0';
-const ZAI_CHAT_ID = process.env.ZAI_CHAT_ID || 'chat-f19fb13d-fe75-4349-abe6-636b5ab5a7be';
-const ZAI_USER_ID = process.env.ZAI_USER_ID || 'f759b018-8782-4c08-b89d-51449d502140';
+const DAYTONA_TOKEN = process.env.DAYTONA_TOKEN || 'dtn_c7bdd782306f6072855d802d3324bd7cd9c90597d29224bf30447bbef5385b22';
+const SANDBOX_ID = process.env.DAYTONA_SANDBOX_ID || '16551277-c744-47d8-bbf4-f681442b1691';
+const DAYTONA_API = 'https://app.daytona.io/api';
 
 const MAX_TOOL_ITERATIONS = 6;
 
@@ -35,12 +40,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!message) return res.status(400).json({ error: 'Message required' });
 
   const isAgent = mode === 'agent';
-
   const systemPrompt = isAgent ? buildAgentSystemPrompt() : buildAssistantSystemPrompt();
 
   const messages: any[] = [{ role: 'system', content: systemPrompt }];
-
-  // Add up to 10 most-recent history turns
   if (Array.isArray(history)) {
     for (const msg of history.slice(-10)) {
       messages.push({ role: msg.role || 'user', content: msg.content });
@@ -48,19 +50,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   messages.push({ role: 'user', content: message });
 
-  // === Agent loop: call Z.ai, parse tool calls, execute, feed results back ===
   const toolLog: Array<{ tool: string; args: any; result: any; duration_ms: number }> = [];
 
   try {
     let finalText = '';
     let iterations = 0;
-    let lastResponse: any = null;
 
+    let completion: { ok: boolean; content?: string; error?: string } | null = null;
     while (iterations < MAX_TOOL_ITERATIONS) {
       iterations++;
-      const completion = await callZaiChat(messages);
-      lastResponse = completion;
-      const content = completion?.choices?.[0]?.message?.content || '';
+      completion = await callZaiViaSandbox(messages);
+      if (!completion.ok) {
+        return res.status(500).json({
+          error: `Z.ai call failed: ${completion.error}`,
+          tool_calls: toolLog,
+        });
+      }
+      const content = completion.content || '';
 
       const toolCalls = isAgent ? parseToolCalls(content) : [];
 
@@ -69,8 +75,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         break;
       }
 
-      // We have tool calls — execute each, log, feed results back
-      // Show progress text (any text outside tool_call blocks)
+      // Execute each tool call, log, feed result back
       const progressText = stripToolCalls(content);
       if (progressText) {
         messages.push({ role: 'assistant', content: progressText });
@@ -84,27 +89,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const duration_ms = Date.now() - t0;
         toolLog.push({ tool: call.name, args: call.args, result, duration_ms });
 
-        // Feed the result back to the LLM as a user-role tool-result message
         const summary = JSON.stringify(result).slice(0, 6000);
         messages.push({
           role: 'user',
           content: `[TOOL RESULT for ${call.name}] ${summary}\n\nContinue. If you have enough information to answer the user, respond normally without any <tool_call> blocks. If you need another tool call, emit it now.`,
         });
       }
-      // loop back to top — call Z.ai again with the updated message list
     }
 
     if (!finalText) {
-      // Ran out of iterations — synthesise a final response from the last tool log
       if (toolLog.length > 0) {
         messages.push({
           role: 'user',
           content: 'You have reached the maximum number of tool calls. Summarise what you accomplished and any final results for the user. Do not emit more tool_call blocks.',
         });
-        const synth = await callZaiChat(messages);
-        finalText = synth?.choices?.[0]?.message?.content || 'Completed tool execution but could not synthesise a final response.';
+        const synth = await callZaiViaSandbox(messages);
+        finalText = synth.ok ? (synth.content || 'Completed tool execution.') : 'Completed tool execution but could not synthesise a final response.';
       } else {
-        finalText = lastResponse?.choices?.[0]?.message?.content || 'No response.';
+        finalText = completion?.content || 'No response.';
       }
     }
 
@@ -125,33 +127,63 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 }
 
 // ---------------------------------------------------------------------------
-// Z.ai chat completion (direct fetch — no SDK needed on Vercel)
+// Call Z.ai via the Daytona sandbox (which is inside Z.ai's infra)
 // ---------------------------------------------------------------------------
 
-async function callZaiChat(messages: any[]): Promise<any> {
-  const url = `${ZAI_BASE_URL}/chat/completions`;
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${ZAI_API_KEY}`,
-    'X-Z-AI-From': 'Z',
-    'X-Chat-Id': ZAI_CHAT_ID,
-    'X-User-Id': ZAI_USER_ID,
-    'X-Token': ZAI_TOKEN,
-  };
-  const body = {
-    messages,
-    thinking: { type: 'disabled' },
-  };
-  const r = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  });
-  if (!r.ok) {
-    const errText = await r.text();
-    throw new Error(`Z.ai API ${r.status}: ${errText.slice(0, 400)}`);
+async function callZaiViaSandbox(messages: any[]): Promise<{ ok: boolean; content?: string; error?: string }> {
+  // Build a Python script that calls the Z.ai SDK and prints JSON to stdout
+  const messagesJson = JSON.stringify(messages).replace(/'/g, "'\\''");
+  const pyScript = `import json, sys
+try:
+    from z_ai_web_dev_sdk import ZAI
+    zai = ZAI.create()
+    completion = zai.chat.completions.create(
+        messages=${messagesJson},
+        thinking={"type": "disabled"}
+    )
+    content = completion.choices[0].message.content if completion.choices else ""
+    print(json.dumps({"ok": True, "content": content}))
+except Exception as e:
+    print(json.dumps({"ok": False, "error": str(e)}))
+`;
+
+  const executeUrl = `${DAYTONA_API}/toolbox/${SANDBOX_ID}/toolbox/process/execute`;
+
+  try {
+    const response = await fetch(executeUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${DAYTONA_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        command: `python3 -c '${pyScript.replace(/'/g, "'\\''")}'`,
+        cwd: '/home/daytona',
+        timeout: 60,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      return { ok: false, error: `Daytona API ${response.status}: ${errText.slice(0, 200)}` };
+    }
+
+    const data = await response.json();
+    const result: string = (data.result || '').trim();
+
+    // The Python script prints JSON to stdout — parse the LAST line (in case there's stderr noise)
+    const lines = result.split('\n').filter((l: string) => l.trim().startsWith('{'));
+    const lastJson = lines[lines.length - 1] || result;
+
+    try {
+      const parsed = JSON.parse(lastJson);
+      return parsed;
+    } catch {
+      return { ok: false, error: `Parse failed: ${result.slice(0, 300)}` };
+    }
+  } catch (e: any) {
+    return { ok: false, error: `Network error: ${e?.message || String(e)}` };
   }
-  return await r.json();
 }
 
 // ---------------------------------------------------------------------------

@@ -26,6 +26,10 @@
       "destination": "/api/ai-assistant"
     },
     {
+      "source": "/api/agent-tools",
+      "destination": "/api/agent-tools"
+    },
+    {
       "source": "/api/credits-page",
       "destination": "/api/credits-page"
     },
