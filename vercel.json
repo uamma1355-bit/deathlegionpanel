@@ -2,6 +2,38 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/ai-agent",
+      "destination": "/api/ai-agent-page"
+    },
+    {
+      "source": "/ai-assistant",
+      "destination": "/api/ai-assistant-page"
+    },
+    {
+      "source": "/credits",
+      "destination": "/api/credits-page"
+    },
+    {
+      "source": "/api/ai-agent-page",
+      "destination": "/api/ai-agent-page"
+    },
+    {
+      "source": "/api/ai-assistant-page",
+      "destination": "/api/ai-assistant-page"
+    },
+    {
+      "source": "/api/ai-assistant",
+      "destination": "/api/ai-assistant"
+    },
+    {
+      "source": "/api/credits-page",
+      "destination": "/api/credits-page"
+    },
+    {
+      "source": "/api/credits",
+      "destination": "/api/credits"
+    },
+    {
       "source": "/api/auto-start",
       "destination": "/api/auto-start"
     },
@@ -105,6 +137,10 @@
     {
       "path": "/api/auto-start",
       "schedule": "*/3 * * * *"
+    },
+    {
+      "path": "/api/credits?action=reset",
+      "schedule": "0 0 * * *"
     }
   ]
 }
