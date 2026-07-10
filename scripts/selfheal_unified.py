@@ -16,7 +16,7 @@ E2B_API_KEY = os.environ.get('E2B_API_KEY', 'e2b_1f9efe2fb912240566b001e41fcfc5a
 DAYTONA_API = 'https://app.daytona.io/api'
 
 # All Daytona sandboxes
-PANEL_SANDBOX = '210e4afe-d6d5-4cc1-b3d3-05f40077ea15'
+PANEL_SANDBOX = '16551277-c744-47d8-bbf4-f681442b1691'
 WINGS_SANDBOXES = [
     'f5a3ce9a-eb83-44a9-8f05-33eee5848b04',
     '3c575ec2-0e0e-46b6-8c28-4aaf329394a9',
@@ -106,7 +106,7 @@ if not panel_ok:
     run_on_daytona(PANEL_SANDBOX, """sudo grep -q 'allowed_origins' /etc/pterodactyl/config.yml || cat << 'EOF' | sudo tee -a /etc/pterodactyl/config.yml
 allowed_origins:
   - "https://deathlegionpanel.vercel.app"
-  - "https://8000-210e4afe-d6d5-4cc1-b3d3-05f40077ea15.daytonaproxy01.eu"
+  - "https://8000-16551277-c744-47d8-bbf4-f681442b1691.daytonaproxy01.eu"
   - "http://127.0.0.1:8000"
 EOF""", 10)
     # Ensure api.host/port is 127.0.0.1:8080 (matches nginx routing)

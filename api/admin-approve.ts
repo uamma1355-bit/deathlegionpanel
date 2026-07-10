@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 const DAYTONA_TOKEN = 'dtn_c7bdd782306f6072855d802d3324bd7cd9c90597d29224bf30447bbef5385b22';
-const SANDBOX_ID = '210e4afe-d6d5-4cc1-b3d3-05f40077ea15';
+const SANDBOX_ID = '16551277-c744-47d8-bbf4-f681442b1691';
 const DAYTONA_API = 'https://app.daytona.io/api';
 
 async function executeOnSandbox(command: string, timeout: number = 60): Promise<string> {

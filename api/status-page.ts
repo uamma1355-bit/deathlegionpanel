@@ -4,7 +4,7 @@ const DAYTONA_TOKEN = 'dtn_c7bdd782306f6072855d802d3324bd7cd9c90597d29224bf30447
 const DAYTONA_API = 'https://app.daytona.io/api';
 
 const SANDBOXES = [
-  { num: 1, id: '210e4afe-d6d5-4cc1-b3d3-05f40077ea15', role: 'Panel + Wings', name: 'Compute Node 1' },
+  { num: 1, id: '16551277-c744-47d8-bbf4-f681442b1691', role: 'Panel + Wings', name: 'Compute Node 1' },
   { num: 2, id: 'f5a3ce9a-eb83-44a9-8f05-33eee5848b04', role: 'Wings Proxy', name: 'Compute Node 2' },
   { num: 3, id: '3c575ec2-0e0e-46b6-8c28-4aaf329394a9', role: 'Wings Proxy', name: 'Compute Node 3' },
   { num: 4, id: '0f1a0854-02dd-4a42-8bda-6b73c2efa738', role: 'Wings Proxy', name: 'Compute Node 4' },

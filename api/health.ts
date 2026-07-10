@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const DAYTONA_PANEL_URL = 'https://8000-210e4afe-d6d5-4cc1-b3d3-05f40077ea15.daytonaproxy01.eu';
+const DAYTONA_PANEL_URL = 'https://8000-16551277-c744-47d8-bbf4-f681442b1691.daytonaproxy01.eu';
 const GITHUB_REPO = 'uamma1355-bit/deathlegionpanel';
 const GITHUB_TOKEN = process.env.GH_TOKEN || process.env.GITHUB_PAT || '';
 

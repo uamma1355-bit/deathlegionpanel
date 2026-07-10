@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const DAYTONA_PANEL_URL = 'https://8000-210e4afe-d6d5-4cc1-b3d3-05f40077ea15.daytonaproxy01.eu';
-const DAYTONA_HOST = '8000-210e4afe-d6d5-4cc1-b3d3-05f40077ea15.daytonaproxy01.eu';
+const DAYTONA_PANEL_URL = 'https://8000-16551277-c744-47d8-bbf4-f681442b1691.daytonaproxy01.eu';
+const DAYTONA_HOST = '8000-16551277-c744-47d8-bbf4-f681442b1691.daytonaproxy01.eu';
 
 function buildTargetUrl(req: VercelRequest): string {
   return DAYTONA_PANEL_URL + (req.url || '/');
@@ -15,9 +15,9 @@ function rewriteCookie(cookieStr: string, vercelHost: string): string {
 
 function rewriteBody(body: string, vercelHost: string): string {
   return body
-    .replace(new RegExp('https?://8000-210e4afe-d6d5-4cc1-b3d3-05f40077ea15\\.daytonaproxy01\\.eu(?::443|:8000)?', 'g'), `https://${vercelHost}`)
-    .replace(new RegExp('8000-210e4afe-d6d5-4cc1-b3d3-05f40077ea15\\.daytonaproxy01\\.eu', 'g'), vercelHost)
-    .replace(new RegExp('wss?://8000-210e4afe-d6d5-4cc1-b3d3-05f40077ea15\\.daytonaproxy01\\.eu(?::443)?', 'g'), (match) => {
+    .replace(new RegExp('https?://8000-16551277-c744-47d8-bbf4-f681442b1691\\.daytonaproxy01\\.eu(?::443|:8000)?', 'g'), `https://${vercelHost}`)
+    .replace(new RegExp('8000-16551277-c744-47d8-bbf4-f681442b1691\\.daytonaproxy01\\.eu', 'g'), vercelHost)
+    .replace(new RegExp('wss?://8000-16551277-c744-47d8-bbf4-f681442b1691\\.daytonaproxy01\\.eu(?::443)?', 'g'), (match) => {
       return match.startsWith('wss') ? `wss://${vercelHost}` : `ws://${vercelHost}`;
     });
 }
@@ -90,7 +90,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (lowerKey === 'set-cookie') return;
       if (lowerKey === 'location') {
         const rewritten = value.replace(
-          new RegExp('https?://8000-210e4afe-d6d5-4cc1-b3d3-05f40077ea15\\.daytonaproxy01\\.eu(?::443|:8000)?', 'g'),
+          new RegExp('https?://8000-16551277-c744-47d8-bbf4-f681442b1691\\.daytonaproxy01\\.eu(?::443|:8000)?', 'g'),
           `https://${vercelHost}`
         );
         res.setHeader('Location', rewritten);

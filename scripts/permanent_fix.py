@@ -3,7 +3,7 @@
 import json, urllib.request, base64, subprocess, os, time
 
 DT = "dtn_c7bdd782306f6072855d802d3324bd7cd9c90597d29224bf30447bbef5385b22"
-SB = "210e4afe-d6d5-4cc1-b3d3-05f40077ea15"
+SB = "16551277-c744-47d8-bbf4-f681442b1691"
 E2B_KEY = "e2b_1f9efe2fb912240566b001e41fcfc5a7b786f8e3"
 
 def cmd(c, t=10):
