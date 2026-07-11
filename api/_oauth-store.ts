@@ -19,6 +19,11 @@ const DB_NAME = 'pterodactyl';
 
 let tablesInitialized = false;
 
+/** Escape a string for use in SQL single-quoted values (standard SQL: ' → '') */
+function sqlEscape(s: string): string {
+  return String(s ?? '').replace(/'/g, "''");
+}
+
 /** Execute a MySQL query on the panel sandbox */
 async function mysqlQuery(sql: string, timeout = 15): Promise<string> {
   // Escape for double-quoted shell string
@@ -157,7 +162,7 @@ export async function createApp(data: {
   const redirectUrisJson = JSON.stringify(data.redirectUris);
   await mysqlQuery(`
     INSERT INTO dl_oauth_apps (client_id, client_secret, name, description, homepage_url, logo_url, redirect_uris)
-    VALUES ('${clientId}', '${clientSecret}', '${data.name}', '${data.description || ''}', '${data.homepageUrl || ''}', '${data.logoUrl || ''}', '${redirectUrisJson.replace(/'/g, "'\\''")}')
+    VALUES ('${clientId}', '${clientSecret}', '${sqlEscape(data.name)}', '${sqlEscape(data.description || '')}', '${sqlEscape(data.homepageUrl || '')}', '${sqlEscape(data.logoUrl || '')}', '${sqlEscape(redirectUrisJson)}')
   `);
   const apps = await mysqlQueryJson(`SELECT * FROM dl_oauth_apps WHERE client_id='${clientId}'`);
   return apps[0] ? parseApp(apps[0]) : null!;
@@ -187,11 +192,11 @@ export async function updateApp(id: number, updates: {
 }): Promise<OAuthApp | null> {
   await initTables();
   const sets: string[] = [];
-  if (updates.name !== undefined) sets.push(`name='${updates.name.replace(/'/g, "'\\''")}'`);
-  if (updates.description !== undefined) sets.push(`description='${updates.description.replace(/'/g, "'\\''")}'`);
-  if (updates.homepageUrl !== undefined) sets.push(`homepage_url='${updates.homepageUrl.replace(/'/g, "'\\''")}'`);
-  if (updates.logoUrl !== undefined) sets.push(`logo_url='${updates.logoUrl.replace(/'/g, "'\\''")}'`);
-  if (updates.redirectUris !== undefined) sets.push(`redirect_uris='${JSON.stringify(updates.redirectUris).replace(/'/g, "'\\''")}'`);
+  if (updates.name !== undefined) sets.push(`name='${sqlEscape(updates.name)}'`);
+  if (updates.description !== undefined) sets.push(`description='${sqlEscape(updates.description)}'`);
+  if (updates.homepageUrl !== undefined) sets.push(`homepage_url='${sqlEscape(updates.homepageUrl)}'`);
+  if (updates.logoUrl !== undefined) sets.push(`logo_url='${sqlEscape(updates.logoUrl)}'`);
+  if (updates.redirectUris !== undefined) sets.push(`redirect_uris='${sqlEscape(JSON.stringify(updates.redirectUris))}'`);
   if (updates.active !== undefined) sets.push(`active=${updates.active ? 1 : 0}`);
   if (updates.rotateSecret) {
     const newSecret = generateToken(32);
@@ -236,7 +241,7 @@ export async function createAuthCode(data: {
   const code = generateToken(32);
   await mysqlQuery(`
     INSERT INTO dl_oauth_codes (code, client_id, user_id, redirect_uri, scope, expires_at)
-    VALUES ('${code}', '${data.client_id}', ${data.user_id}, '${data.redirect_uri}', '${data.scope}', DATE_ADD(NOW(), INTERVAL 10 MINUTE))
+    VALUES ('${code}', '${sqlEscape(data.client_id)}', ${data.user_id}, '${sqlEscape(data.redirect_uri)}', '${sqlEscape(data.scope)}', DATE_ADD(NOW(), INTERVAL 10 MINUTE))
   `);
   return code;
 }
@@ -274,7 +279,7 @@ export async function createTokens(data: {
   // Access token: 1 hour. Refresh token: 90 days.
   await mysqlQuery(`
     INSERT INTO dl_oauth_tokens (access_token, refresh_token, client_id, user_id, scope, access_expires_at, refresh_expires_at)
-    VALUES ('${accessToken}', '${refreshToken}', '${data.client_id}', ${data.user_id}, '${data.scope}', DATE_ADD(NOW(), INTERVAL 1 HOUR), DATE_ADD(NOW(), INTERVAL 90 DAY))
+    VALUES ('${accessToken}', '${refreshToken}', '${sqlEscape(data.client_id)}', ${data.user_id}, '${sqlEscape(data.scope)}', DATE_ADD(NOW(), INTERVAL 1 HOUR), DATE_ADD(NOW(), INTERVAL 90 DAY))
   `);
   return { access_token: accessToken, refresh_token: refreshToken, access_expires_at: new Date(Date.now() + 3600000).toISOString() };
 }
