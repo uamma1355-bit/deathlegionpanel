@@ -30,6 +30,10 @@
       "destination": "/api/agent-tools"
     },
     {
+      "source": "/api/ads",
+      "destination": "/api/ads"
+    },
+    {
       "source": "/api/credits-page",
       "destination": "/api/credits-page"
     },

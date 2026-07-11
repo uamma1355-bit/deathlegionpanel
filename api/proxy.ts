@@ -93,6 +93,72 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // === Credit check: intercept server power-on requests ===
+  // POST /api/client/servers/{id}/power with {"signal":"start"} costs 5 credits
+  const reqUrl = req.url || '';
+  const isPowerOn = method === 'POST' && /\/api\/client\/servers\/[^/]+\/power/.test(reqUrl) && body;
+  if (isPowerOn) {
+    try {
+      const bodyText = body!.toString('utf8');
+      const parsed = JSON.parse(bodyText);
+      if (parsed.signal === 'start') {
+        // Get the username from the account API (using the same cookies)
+        const accountResp = await fetch(`https://${vercelHost}/api/client/account`, {
+          headers: {
+            'Accept': 'application/json',
+            'Cookie': req.headers['cookie'] || '',
+            'X-XSRF-TOKEN': (req.headers['x-xsrf-token'] as string) || '',
+          },
+        });
+        if (accountResp.ok) {
+          const accountData = await accountResp.json();
+          const username = accountData?.attributes?.username || 'guest';
+
+          // Check credit balance
+          const balanceResp = await fetch(`https://${vercelHost}/api/credits?action=balance&user=${encodeURIComponent(username)}`);
+          if (balanceResp.ok) {
+            const balanceData = await balanceResp.json();
+            const credits = typeof balanceData.credits === 'number' ? balanceData.credits : 999999;
+            const plan = balanceData.plan || 'Free';
+            const START_COST = 5;
+
+            if (plan !== 'Admin' && credits < START_COST) {
+              // Insufficient credits — return error with special code for the UI modal
+              return res.status(403).json({
+                errors: [{
+                  code: 'InsufficientCredits',
+                  status: '403',
+                  detail: 'Insufficient credits to start server',
+                  meta: {
+                    credits: credits,
+                    needed: START_COST,
+                    plan: plan,
+                    resetAt: balanceData.resetAt,
+                    resetIn: balanceData.resetIn,
+                    canWatchAd: true,
+                    adReward: 50,
+                  },
+                }],
+              });
+            }
+
+            // Deduct credits
+            if (plan !== 'Admin') {
+              await fetch(`https://${vercelHost}/api/credits?action=spend`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user: username, amount: START_COST }),
+              });
+            }
+          }
+        }
+      }
+    } catch (creditErr) {
+      // If credit check fails, log but don't block the request
+      console.error('Credit check error (non-blocking):', creditErr instanceof Error ? creditErr.message : creditErr);
+    }
+  }
+
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 60000);
@@ -389,6 +455,121 @@ a[data-dl-banner="1"]:hover {
 .navbar-brand img, .main-header .logo img, [class*="logo"] img {
   filter: drop-shadow(0 0 6px rgba(188,110,60,0.4));
 }
+
+/* === Credit Watch Ad / Wait modal === */
+.dl-modal-overlay {
+  position: fixed; inset: 0; z-index: 100000;
+  background: rgba(0,0,0,0.85);
+  backdrop-filter: blur(8px);
+  display: none;
+  align-items: center; justify-content: center;
+}
+.dl-modal-overlay.active { display: flex; }
+.dl-modal {
+  background: rgba(20,15,12,0.98);
+  border: 1px solid rgba(188,110,60,0.3);
+  border-radius: 16px;
+  padding: 2rem; max-width: 480px; width: 90%;
+  text-align: center; position: relative;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.8), 0 0 80px rgba(188,110,60,0.1);
+}
+.dl-modal h2 {
+  font-family: 'Cinzel', serif; font-size: 1.4rem; font-weight: 900;
+  color: #ef4444; margin-bottom: 0.5rem; letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.dl-modal .dl-modal-sub {
+  color: #888; font-size: 0.85rem; margin-bottom: 1.5rem;
+}
+.dl-modal .dl-credit-info {
+  background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2);
+  border-radius: 10px; padding: 1rem; margin-bottom: 1.5rem;
+}
+.dl-modal .dl-credit-info .you-have {
+  color: #ef4444; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em;
+}
+.dl-modal .dl-credit-info .credits-num {
+  font-family: 'JetBrains Mono', monospace; font-size: 2rem; font-weight: 700; color: #ef4444;
+}
+.dl-modal .dl-credit-info .credits-need {
+  color: #666; font-size: 0.8rem; margin-top: 0.2rem;
+}
+.dl-modal-actions { display: flex; flex-direction: column; gap: 0.6rem; }
+.dl-modal-btn {
+  padding: 0.8rem 1.2rem; border: none; border-radius: 10px;
+  font-weight: 600; font-size: 0.9rem; cursor: pointer;
+  transition: all 0.2s; font-family: 'Inter', sans-serif;
+  display: flex; align-items: center; justify-content: center; gap: 0.4rem;
+  text-decoration: none;
+}
+.dl-modal-btn-ad {
+  background: linear-gradient(135deg, #bc6e3c, #e89060); color: #fff;
+}
+.dl-modal-btn-ad:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(188,110,60,0.4); }
+.dl-modal-btn-wait {
+  background: rgba(40,40,40,0.9); color: #aaa; border: 1px solid rgba(255,255,255,0.08);
+}
+.dl-modal-btn-wait:hover { background: rgba(60,60,60,0.9); color: #fff; }
+.dl-modal-btn-close {
+  background: transparent; color: #555; font-size: 0.8rem;
+}
+.dl-modal-btn-close:hover { color: #888; }
+.dl-modal .dl-reset-info {
+  margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.06);
+  color: #555; font-size: 0.75rem;
+}
+.dl-modal .dl-reset-info strong { color: #e89060; }
+
+/* Ad player overlay */
+.dl-ad-player {
+  position: fixed; inset: 0; z-index: 100001;
+  background: rgba(0,0,0,0.95);
+  display: none; align-items: center; justify-content: center; flex-direction: column;
+}
+.dl-ad-player.active { display: flex; }
+.dl-ad-player .dl-ad-frame {
+  width: 90%; max-width: 640px; height: 360px;
+  background: #111; border: 1px solid rgba(188,110,60,0.3);
+  border-radius: 12px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center; flex-direction: column;
+}
+.dl-ad-player .dl-ad-title {
+  color: #e89060; font-size: 1.2rem; font-weight: 700; margin-bottom: 0.5rem;
+  font-family: 'Cinzel', serif;
+}
+.dl-ad-player .dl-ad-sponsor {
+  color: #666; font-size: 0.8rem; margin-bottom: 1rem;
+}
+.dl-ad-player .dl-ad-link {
+  display: inline-block; padding: 0.6rem 1.5rem;
+  background: linear-gradient(135deg, #bc6e3c, #e89060); color: #fff;
+  border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 0.85rem;
+}
+.dl-ad-player .dl-ad-timer {
+  margin-top: 1rem; color: #aaa; font-size: 0.9rem; font-family: 'JetBrains Mono', monospace;
+}
+.dl-ad-player .dl-ad-timer .count { color: #e89060; font-weight: 700; font-size: 1.5rem; }
+.dl-ad-player .dl-ad-progress {
+  width: 90%; max-width: 640px; height: 4px; background: rgba(255,255,255,0.1);
+  border-radius: 2px; margin-top: 0.5rem; overflow: hidden;
+}
+.dl-ad-player .dl-ad-progress-bar {
+  height: 100%; background: linear-gradient(90deg, #bc6e3c, #e89060);
+  width: 0%; transition: width 1s linear;
+}
+.dl-ad-player .dl-ad-reward {
+  display: none; text-align: center;
+}
+.dl-ad-player .dl-ad-reward.active { display: block; }
+.dl-ad-player .dl-ad-reward h3 {
+  font-family: 'Cinzel', serif; font-size: 1.5rem; color: #22c55e; margin-bottom: 0.5rem;
+}
+.dl-ad-player .dl-ad-reward .reward-amount {
+  font-family: 'JetBrains Mono', monospace; font-size: 3rem; font-weight: 700; color: #22c55e;
+}
+.dl-ad-player .dl-ad-reward .reward-msg {
+  color: #aaa; font-size: 0.85rem; margin: 0.5rem 0 1.5rem;
+}
 </style>
 
 <!-- BETA badge -->
@@ -427,6 +608,52 @@ a[data-dl-banner="1"]:hover {
   <div class="dl-credit-badge" id="dlCreditBadge">
     <span class="dot"></span>
     <span id="dlCreditCount">---</span> cr
+  </div>
+</div>
+
+<!-- Credit depleted modal -->
+<div class="dl-modal-overlay" id="dlCreditModal">
+  <div class="dl-modal">
+    <h2>Out of Credits</h2>
+    <p class="dl-modal-sub">You need credits to start this server.</p>
+    <div class="dl-credit-info">
+      <div class="you-have">You have</div>
+      <div class="credits-num" id="dlModalCredits">0</div>
+      <div class="credits-need" id="dlModalNeeded">Need 5 credits to start</div>
+    </div>
+    <div class="dl-modal-actions">
+      <button class="dl-modal-btn dl-modal-btn-ad" onclick="dlWatchAd()">
+        ▶ Watch Ad — Earn 50 Credits
+      </button>
+      <button class="dl-modal-btn dl-modal-btn-wait" id="dlWaitBtn" onclick="dlShowWaitInfo()">
+        Wait Until Tomorrow
+      </button>
+      <button class="dl-modal-btn dl-modal-btn-close" onclick="dlCloseModal()">
+        Cancel
+      </button>
+    </div>
+    <div class="dl-reset-info" id="dlResetInfo">
+      Credits reset at <strong id="dlResetAt">midnight UTC</strong> (in <strong id="dlResetIn">--</strong>)
+    </div>
+  </div>
+</div>
+
+<!-- Ad player overlay -->
+<div class="dl-ad-player" id="dlAdPlayer">
+  <div class="dl-ad-frame" id="dlAdFrame">
+    <div class="dl-ad-title" id="dlAdTitle">Advertisement</div>
+    <div class="dl-ad-sponsor" id="dlAdSponsor">Sponsored content</div>
+    <a class="dl-ad-link" id="dlAdLink" href="#" target="_blank" rel="noopener">Learn More</a>
+    <div class="dl-ad-timer">Ad ends in <span class="count" id="dlAdCountdown">15</span>s</div>
+  </div>
+  <div class="dl-ad-progress">
+    <div class="dl-ad-progress-bar" id="dlAdProgressBar"></div>
+  </div>
+  <div class="dl-ad-reward" id="dlAdReward">
+    <h3>Reward Earned!</h3>
+    <div class="reward-amount">+50</div>
+    <div class="reward-msg" id="dlAdRewardMsg">Credits added to your account</div>
+    <button class="dl-modal-btn dl-modal-btn-ad" onclick="dlCloseAdPlayer()">Continue</button>
   </div>
 </div>
 
@@ -573,6 +800,167 @@ a[data-dl-banner="1"]:hover {
   setInterval(injectLegionAuth, 1000);
   setInterval(loadCredits, 5000);
   setTimeout(loadCredits, 2000);
+
+  // === Credit system: intercept power-on API errors and show Watch Ad modal ===
+  var dlOriginalFetch = window.fetch;
+  window.fetch = function(url, options) {
+    return dlOriginalFetch.apply(this, arguments).then(function(resp) {
+      // Only intercept power-on requests
+      var urlStr = String(url);
+      if (urlStr.indexOf('/power') === -1) return resp;
+      if (resp.status !== 403) return resp;
+      // Clone the response so we can read the body
+      var clone = resp.clone();
+      clone.json().then(function(data) {
+        var err = data.errors && data.errors[0];
+        if (err && err.code === 'InsufficientCredits') {
+          var meta = err.meta || {};
+          dlShowCreditModal(meta.credits || 0, meta.needed || 5, meta.resetAt, meta.resetIn);
+        }
+      }).catch(function() {});
+      return resp;
+    });
+  };
+
+  // Also intercept XMLHttpRequest (Pterodactyl React SPA uses axios)
+  var dlOriginalXHROpen = XMLHttpRequest.prototype.open;
+  var dlOriginalXHRSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function(method, url) {
+    this._dlUrl = url;
+    this._dlMethod = method;
+    return dlOriginalXHROpen.apply(this, arguments);
+  };
+  XMLHttpRequest.prototype.send = function(body) {
+    var self = this;
+    this.addEventListener('load', function() {
+      if (self._dlUrl && self._dlUrl.indexOf('/power') !== -1 && self.status === 403) {
+        try {
+          var data = JSON.parse(self.responseText);
+          var err = data.errors && data.errors[0];
+          if (err && err.code === 'InsufficientCredits') {
+            var meta = err.meta || {};
+            dlShowCreditModal(meta.credits || 0, meta.needed || 5, meta.resetAt, meta.resetIn);
+          }
+        } catch(e) {}
+      }
+    });
+    return dlOriginalXHRSend.apply(this, arguments);
+  };
+
+  // === Credit modal functions ===
+  window.dlShowCreditModal = function(credits, needed, resetAt, resetIn) {
+    var modal = document.getElementById('dlCreditModal');
+    if (!modal) return;
+    var cEl = document.getElementById('dlModalCredits');
+    var nEl = document.getElementById('dlModalNeeded');
+    var rAtEl = document.getElementById('dlResetAt');
+    var rInEl = document.getElementById('dlResetIn');
+    if (cEl) cEl.textContent = credits;
+    if (nEl) nEl.textContent = 'Need ' + needed + ' credits to start';
+    if (rAtEl && resetAt) rAtEl.textContent = new Date(resetAt).toLocaleTimeString();
+    if (rInEl && resetIn) rInEl.textContent = resetIn;
+    modal.classList.add('active');
+  };
+  window.dlCloseModal = function() {
+    var modal = document.getElementById('dlCreditModal');
+    if (modal) modal.classList.remove('active');
+  };
+  window.dlShowWaitInfo = function() {
+    var btn = document.getElementById('dlWaitBtn');
+    if (btn) {
+      btn.innerHTML = '⏳ Credits reset at midnight UTC. Come back tomorrow!';
+      btn.disabled = true;
+    }
+  };
+
+  // === Ad player ===
+  window.dlWatchAd = function() {
+    dlCloseModal();
+    // Get a random ad
+    dlOriginalFetch('/api/ads?action=random', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({user: window._dlUsername || 'guest'}) })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.success) {
+          alert('No more ads available today. Please wait until tomorrow for credits to reset.');
+          return;
+        }
+        dlPlayAd(data.ad);
+      })
+      .catch(function(e) { alert('Failed to load ad: ' + e.message); });
+  };
+
+  window.dlPlayAd = function(ad) {
+    var player = document.getElementById('dlAdPlayer');
+    var frame = document.getElementById('dlAdFrame');
+    var titleEl = document.getElementById('dlAdTitle');
+    var sponsorEl = document.getElementById('dlAdSponsor');
+    var linkEl = document.getElementById('dlAdLink');
+    var countdownEl = document.getElementById('dlAdCountdown');
+    var progressEl = document.getElementById('dlAdProgressBar');
+    var rewardEl = document.getElementById('dlAdReward');
+
+    if (!player) return;
+    // Reset UI
+    if (frame) frame.style.display = 'flex';
+    if (rewardEl) rewardEl.classList.remove('active');
+    if (titleEl) titleEl.textContent = ad.title;
+    if (sponsorEl) sponsorEl.textContent = 'Sponsored by ' + ad.title;
+    if (linkEl) linkEl.href = ad.url;
+    var duration = ad.duration || 15;
+    var remaining = duration;
+    if (countdownEl) countdownEl.textContent = remaining;
+    if (progressEl) progressEl.style.width = '0%';
+
+    player.classList.add('active');
+
+    var interval = setInterval(function() {
+      remaining--;
+      if (countdownEl) countdownEl.textContent = remaining;
+      if (progressEl) progressEl.style.width = ((duration - remaining) / duration * 100) + '%';
+      if (remaining <= 0) {
+        clearInterval(interval);
+        dlClaimAdReward(ad);
+      }
+    }, 1000);
+  };
+
+  window.dlClaimAdReward = function(ad) {
+    var username = window._dlUsername || 'guest';
+    dlOriginalFetch('/api/ads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user: username, action: 'watch', adId: ad.id })
+    })
+      .then(function(r) { return r.json(); })
+      .catch(function() { return null; })
+      .then(function(data) {
+        var frame = document.getElementById('dlAdFrame');
+        var rewardEl = document.getElementById('dlAdReward');
+        var msgEl = document.getElementById('dlAdRewardMsg');
+        if (frame) frame.style.display = 'none';
+        if (rewardEl) rewardEl.classList.add('active');
+        if (msgEl && data) {
+          msgEl.textContent = data.message || ('+50 credits added. New balance: ' + (data.newBalance || 'N/A'));
+        }
+        // Refresh credit badge
+        setTimeout(loadCredits, 500);
+      });
+  };
+
+  window.dlCloseAdPlayer = function() {
+    var player = document.getElementById('dlAdPlayer');
+    if (player) player.classList.remove('active');
+  };
+
+  // Get username for ad rewards
+  dlOriginalFetch('/api/client/account', { credentials: 'include', headers: { 'Accept': 'application/json' } })
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      if (data && data.attributes) {
+        window._dlUsername = data.attributes.username;
+      }
+    })
+    .catch(function() {});
 })();
 </script>`;
           if (bodyStr.includes('</body>')) {

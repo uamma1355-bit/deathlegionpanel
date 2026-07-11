@@ -144,8 +144,8 @@ const AGENT_PAGE = `<!DOCTYPE html>
       </div>
       <div class="terminal" id="terminal">
         <div class="terminal-line system">[System] Death Legion Autonomous Agent initialised.</div>
-        <div class="terminal-line system">[System] Direct tools are ready — no LLM key required.</div>
-        <div class="terminal-line system">[System] Use the left panel to execute tools, or type natural language below if LLM is available.</div>
+        <div class="terminal-line system">[System] NL command parser online — type: "list servers", "restart server abc123", "deploy bot", "read file index.js on server abc123", etc.</div>
+        <div class="terminal-line system">[System] Type "help" for full command list. Use the left panel for direct tool buttons.</div>
       </div>
       <div class="input-wrap">
         <input type="text" id="cmdInput" placeholder="Ask the agent to do anything... (e.g. 'list my servers and restart the first one')" onkeypress="if(event.key==='Enter')sendLLM()" />
@@ -350,16 +350,273 @@ const AGENT_PAGE = `<!DOCTYPE html>
       })();
     }
 
-    // === LLM mode (works when ZAI_API_KEY is configured on Vercel) ===
+    // === NL Command Parser (works WITHOUT any LLM — instant, always available) ===
     let history = [];
+    let cachedServers = [];
+
+    function extractServerId(text) {
+      // Match 8-char hex identifiers (Pterodactyl short IDs)
+      var m = text.match(/\\b([a-f0-9]{8})\\b/i);
+      if (m) return m[1];
+      // Match "server XXXX" pattern
+      m = text.match(/server\\s+([a-zA-Z0-9_-]+)/i);
+      if (m) return m[1];
+      // Fall back to selected server
+      if (selectedServer) return selectedServer;
+      return null;
+    }
+
+    function findServerByName(name) {
+      if (!cachedServers || cachedServers.length === 0) return null;
+      var lower = name.toLowerCase();
+      // Exact match
+      var exact = cachedServers.find(function(s) { return s.name.toLowerCase() === lower; });
+      if (exact) return exact;
+      // Partial match
+      var partial = cachedServers.find(function(s) { return s.name.toLowerCase().indexOf(lower) !== -1 || lower.indexOf(s.name.toLowerCase()) !== -1; });
+      return partial;
+    }
+
+    async function ensureServersLoaded() {
+      if (cachedServers.length > 0) return;
+      try {
+        var r = await fetch('/api/agent-tools', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ tool: 'list_servers', args: {} })
+        });
+        var d = await r.json();
+        if (d.result && d.result.servers) {
+          cachedServers = d.result.servers;
+          renderServerList(cachedServers);
+        }
+      } catch(e) {}
+    }
+
+    async function parseAndExecute(cmd) {
+      var lower = cmd.toLowerCase().trim();
+      addLine('user', '> ' + cmd);
+
+      // Ensure servers are loaded for name-based lookup
+      await ensureServersLoaded();
+
+      // === HELP ===
+      if (lower === 'help' || lower === '?' || lower === 'commands') {
+        addLine('agent', 'Available commands:\\n' +
+          '  • list servers / show my servers\\n' +
+          '  • start server <id>\\n' +
+          '  • stop server <id>\\n' +
+          '  • restart server <id>\\n' +
+          '  • kill server <id>\\n' +
+          '  • cpu / resources / usage for server <id>\\n' +
+          '  • list files [dir] on server <id>\\n' +
+          '  • read file <path> on server <id>\\n' +
+          '  • write file <path> on server <id>: <content>\\n' +
+          '  • install <packages> on server <id>\\n' +
+          '  • deploy bot to server <id>\\n' +
+          '  • build a whatsapp bot\\n' +
+          '\\nTip: Click a server in the left panel to select it, then you can omit the server ID.\\n' +
+          'You can also use server name instead of ID.');
+        return true;
+      }
+
+      // === LIST SERVERS ===
+      if (lower.match(/^(list|show|my)\\s*(servers|server)?$/) || lower.includes('list servers') || lower.includes('show servers') || lower.includes('my servers')) {
+        await execDirect('list_servers', {});
+        return true;
+      }
+
+      // === DEPLOY BOT ===
+      if (lower.includes('deploy') && lower.includes('bot') || lower.includes('build') && lower.includes('bot') || lower.includes('whatsapp bot')) {
+        var deployServer = extractServerId(cmd);
+        if (!deployServer) {
+          // Try name-based lookup
+          var nameMatch = cmd.match(/(?:server|to|on)\\s+([a-zA-Z0-9_\\s-]+)/i);
+          if (nameMatch) {
+            var found = findServerByName(nameMatch[1].trim());
+            if (found) deployServer = found.id;
+          }
+        }
+        if (!deployServer && cachedServers.length > 0) {
+          deployServer = cachedServers[0].id;
+          addLine('system', '[Agent] Using first server: ' + cachedServers[0].name + ' (' + deployServer + ')');
+        }
+        if (!deployServer) {
+          addLine('error', 'Could not determine which server to deploy to. Click a server in the left panel first, or specify the server ID.');
+          return true;
+        }
+        addLine('system', '[Agent] Deploying WhatsApp bot to server ' + deployServer + '...');
+        await deployBotToServer(deployServer);
+        return true;
+      }
+
+      // === POWER CONTROL ===
+      var powerMatch = lower.match(/(start|stop|restart|kill)\\s+server\\s+([a-f0-9]{8}|[a-zA-Z0-9_-]+)/i);
+      if (!powerMatch) powerMatch = lower.match(/(start|stop|restart|kill)\\s+([a-f0-9]{8})/i);
+      if (powerMatch) {
+        var action = powerMatch[1].toLowerCase();
+        var sid = powerMatch[2];
+        // If it's not a hex ID, try name lookup
+        if (!sid.match(/^[a-f0-9]{8}$/i)) {
+          var byName = findServerByName(sid);
+          if (byName) sid = byName.id;
+        }
+        await execDirect('send_power', { server: sid, action: action });
+        return true;
+      }
+
+      // === RESOURCES ===
+      if (lower.includes('cpu') || lower.includes('resource') || lower.includes('usage') || lower.includes('memory') || lower.includes('ram')) {
+        var resServer = extractServerId(cmd);
+        if (resServer) {
+          await execDirect('get_resources', { server: resServer });
+          return true;
+        }
+      }
+
+      // === LIST FILES ===
+      if (lower.includes('list files') || lower.includes('ls ') || lower.match(/list\\s+files/)) {
+        var lsServer = extractServerId(cmd);
+        if (lsServer) {
+          var dirMatch = cmd.match(/(?:dir|directory|in|on)\\s+([\\/\\w.-]+)/i);
+          var dir = dirMatch ? dirMatch[1] : '/';
+          await execDirect('list_files', { server: lsServer, directory: dir });
+          return true;
+        }
+      }
+
+      // === READ FILE ===
+      if (lower.includes('read file') || lower.includes('cat ') || lower.includes('show file') || lower.includes('view file')) {
+        var readFileMatch = cmd.match(/(?:read|cat|show|view)\\s+(?:file\\s+)?([\\/\\w.-]+)\\s+(?:on|from)?\\s*(?:server\\s+)?([a-f0-9]{8}|[a-zA-Z0-9_-]+)?/i);
+        if (readFileMatch) {
+          var filePath = readFileMatch[1];
+          var fileServer = readFileMatch[2] || selectedServer;
+          if (fileServer && !fileServer.match(/^[a-f0-9]{8}$/i)) {
+            var byName = findServerByName(fileServer);
+            if (byName) fileServer = byName.id;
+          }
+          if (fileServer) {
+            await execDirect('read_file', { server: fileServer, file: filePath });
+            return true;
+          }
+        }
+      }
+
+      // === WRITE FILE ===
+      if (lower.includes('write file') || lower.includes('create file') || lower.includes('edit file')) {
+        var writeMatch = cmd.match(/(?:write|create|edit)\\s+(?:file\\s+)?([\\/\\w.-]+)\\s+(?:on|to)?\\s*(?:server\\s+)?([a-f0-9]{8}|[a-zA-Z0-9_-]+)?(?:\\s*[:=]\\s*|\\s+with\\s+)?([\\s\\S]*)?/i);
+        if (writeMatch) {
+          var wPath = writeMatch[1];
+          var wServer = writeMatch[2] || selectedServer;
+          var wContent = writeMatch[3] || '';
+          if (wServer && !wServer.match(/^[a-f0-9]{8}$/i)) {
+            var byName = findServerByName(wServer);
+            if (byName) wServer = byName.id;
+          }
+          if (wServer) {
+            await execDirect('write_file', { server: wServer, file: wPath, content: wContent });
+            return true;
+          }
+        }
+      }
+
+      // === INSTALL PACKAGES ===
+      if (lower.includes('install') && (lower.includes('npm') || lower.includes('package'))) {
+        var installMatch = cmd.match(/install\\s+([\\w@.-]+(?:\\s+[\\w@.-]+)*)\\s+(?:on|to)?\\s*(?:server\\s+)?([a-f0-9]{8}|[a-zA-Z0-9_-]+)?/i);
+        if (installMatch) {
+          var packages = installMatch[1];
+          var instServer = installMatch[2] || selectedServer;
+          if (instServer && !instServer.match(/^[a-f0-9]{8}$/i)) {
+            var byName = findServerByName(instServer);
+            if (byName) instServer = byName.id;
+          }
+          if (instServer) {
+            await execDirect('install_packages', { server: instServer, packages: packages });
+            return true;
+          }
+        }
+      }
+
+      // === SEND COMMAND ===
+      if (lower.includes('send command') || lower.includes('run command') || lower.includes('console command')) {
+        var cmdMatch = cmd.match(/(?:send|run)\\s+command\\s+["'](.+?)["']\\s+(?:on|to)?\\s*(?:server\\s+)?([a-f0-9]{8}|[a-zA-Z0-9_-]+)?/i);
+        if (cmdMatch) {
+          var command = cmdMatch[1];
+          var cmdServer = cmdMatch[2] || selectedServer;
+          if (cmdServer && !cmdServer.match(/^[a-f0-9]{8}$/i)) {
+            var byName = findServerByName(cmdServer);
+            if (byName) cmdServer = byName.id;
+          }
+          if (cmdServer) {
+            await execDirect('send_command', { server: cmdServer, command: command });
+            return true;
+          }
+        }
+      }
+
+      // === Not matched — fall back to LLM ===
+      return false;
+    }
+
+    async function deployBotToServer(serverId) {
+      setStatus('working', 'Deploying');
+      var botCode = [
+        "const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');",
+        "const { Boom } = require('@hapi/boom');",
+        "const P = require('pino');",
+        "",
+        "async function start() {",
+        "  const { state, saveCreds } = await useMultiFileAuthState('auth_state');",
+        "  const sock = makeWASocket({ auth: state, printQRInTerminal: true, logger: P({ level: 'info' }) });",
+        "  sock.ev.on('creds.update', saveCreds);",
+        "  sock.ev.on('connection.update', (u) => {",
+        "    if (u.connection === 'close') {",
+        "      const r = new Boom(u.lastDisconnect?.error)?.output?.statusCode;",
+        "      if (r !== DisconnectReason.loggedOut) start();",
+        "    }",
+        "  });",
+        "  sock.ev.on('messages.upsert', async (m) => {",
+        "    const msg = m.messages[0];",
+        "    if (!msg.message || msg.key.fromMe) return;",
+        "    const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';",
+        "    const from = msg.key.remoteJid;",
+        "    if (text === '!ping') await sock.sendMessage(from, { text: 'pong! \\u{1F3D3}' });",
+        "    else if (text === '!help') await sock.sendMessage(from, { text: 'Commands: !ping, !help, !hello' });",
+        "    else if (text === '!hello') await sock.sendMessage(from, { text: 'Hello from Death Legion bot! \\u{1F480}' });",
+        "  });",
+        "}",
+        "start();"
+      ].join('\\n');
+      var pkgJson = JSON.stringify({
+        name: 'death-legion-bot', version: '1.0.0', main: 'index.js',
+        dependencies: { '@whiskeysockets/baileys': '^6.7.0', '@hapi/boom': '^10.0.1', 'pino': '^8.0.0' }
+      }, null, 2);
+      await execDirect('write_file', { server: serverId, file: 'package.json', content: pkgJson });
+      await execDirect('write_file', { server: serverId, file: 'index.js', content: botCode });
+      await execDirect('send_command', { server: serverId, command: 'npm install' });
+      await execDirect('send_power', { server: serverId, action: 'restart' });
+      addLine('agent', '\\u2705 WhatsApp bot deployed to server ' + serverId + '. Open the panel console to scan the QR code: https://deathlegionpanel.vercel.app/server/' + serverId);
+      setStatus('idle');
+    }
+
+    // === Main command handler: try NL parser first, fall back to LLM ===
     async function sendLLM(text) {
       const input = document.getElementById('cmdInput');
       const cmd = text || input.value.trim();
       if (!cmd) return;
       input.value = '';
-      addLine('user', '> ' + cmd);
+      setStatus('working', 'Processing');
+
+      // Try NL parser first (instant, no LLM needed)
+      var handled = await parseAndExecute(cmd);
+      if (handled) {
+        setStatus('idle');
+        return;
+      }
+
+      // Fall back to LLM
+      addLine('system', '[Agent] Trying LLM mode...');
       history.push({ role: 'user', content: cmd });
-      setStatus('working', 'Thinking');
       try {
         const res = await fetch('/api/ai-assistant', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -374,41 +631,22 @@ const AGENT_PAGE = `<!DOCTYPE html>
           }
           addLine('agent', data.response || '(no response)');
           history.push({ role: 'assistant', content: data.response });
-          if (data.tool_calls && data.tool_calls.some(function(tc){return tc.tool==='list_servers';})) {
-            const lsCall = data.tool_calls.find(function(tc){return tc.tool==='list_servers';});
-            if (lsCall.result && lsCall.result.servers) renderServerList(lsCall.result.servers);
-          }
         } else {
-          addLine('error', '[Error] ' + (data.error || 'Unknown'));
-          if (data.error && data.error.indexOf('Z.ai') !== -1) {
-            addLine('system', '[Hint] Direct tools on the left still work — no LLM key needed.');
-          }
+          addLine('error', '[LLM Error] ' + (data.error || 'Unknown'));
+          addLine('system', '[Hint] Use the direct tool buttons on the left, or try: "list servers", "restart server <id>", "deploy bot to server <id>"');
         }
       } catch(e) {
         addLine('error', '[Network Error] ' + e.message);
+        addLine('system', '[Hint] Use the direct tool buttons on the left, or try: "list servers", "restart server <id>", "deploy bot to server <id>"');
       }
       setStatus('idle');
     }
 
-    // === On load: check LLM availability and auto-list servers ===
+    // === On load: set status + auto-list servers ===
     (async function() {
-      try {
-        const r = await fetch('/api/ai-assistant', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ message: 'ping', mode: 'assistant' })
-        });
-        const d = await r.json();
-        const warn = document.getElementById('llmWarning');
-        if (d.success) {
-          warn.className = 'llm-warning ok';
-          warn.textContent = '✓ LLM online — natural language commands work.';
-        } else {
-          warn.textContent = '⚠ LLM offline (' + (d.error || 'unknown') + '). Direct tools still work — use the buttons below.';
-        }
-      } catch(e) {
-        document.getElementById('llmWarning').textContent = '⚠ LLM check failed. Direct tools still work.';
-      }
+      const warn = document.getElementById('llmWarning');
+      warn.className = 'llm-warning ok';
+      warn.textContent = '✓ Agent ready — type natural language commands (e.g. "list servers", "restart server abc123", "deploy bot"). NL parser works without LLM. Falls back to LLM for complex queries.';
       // Auto-load server list
       execDirect('list_servers', {});
     })();
