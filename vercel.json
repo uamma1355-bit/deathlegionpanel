@@ -34,6 +34,14 @@
       "destination": "/api/ads"
     },
     {
+      "source": "/ads",
+      "destination": "/api/ads-page"
+    },
+    {
+      "source": "/api/ads-page",
+      "destination": "/api/ads-page"
+    },
+    {
       "source": "/api/credits-page",
       "destination": "/api/credits-page"
     },
