@@ -80,6 +80,9 @@ if ($existingServers < 2) {
     $creationService = app(ServerCreationService::class);
     $nodes = Node::orderBy('id')->get();
     for ($i = $existingServers + 1; $i <= 2; $i++) {
+        // RE-CHECK server count inside the loop to prevent duplicates
+        $currentCount = Server::where('owner_id', $user->id)->count();
+        if ($currentCount >= 2) break;
         $bestNode = null; $minCount = 999;
         foreach ($nodes as $n) { $cnt = Server::where('node_id', $n->id)->count(); if ($cnt < $minCount) { $minCount = $cnt; $bestNode = $n; } }
         if (!$bestNode) break;
@@ -185,20 +188,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const panelUsername = result.username;
       const panelPassword = 'DeathLegion2025!';
       let loginOk = false;
+      const allCookies: string[] = [];
       try {
-        // Get CSRF cookie
-        const csrfResp = await fetch('https://deathlegionpanel.vercel.app/sanctum/csrf-cookie');
-        const setCookies = csrfResp.headers.getSetCookie?.() || [];
+        // Get CSRF cookie from the panel (proxied through Vercel)
+        const csrfResp = await fetch('https://deathlegionpanel.vercel.app/sanctum/csrf-cookie', {
+          headers: { 'Accept': 'application/json' },
+        });
+        const csrfCookies = csrfResp.headers.getSetCookie?.() || [];
         let xsrfToken = '';
         let sessionCookie = '';
-        for (const c of setCookies) {
+        const cookiePairs: string[] = [];
+        for (const c of csrfCookies) {
           const m = c.match(/XSRF-TOKEN=([^;]+)/);
-          if (m) xsrfToken = decodeURIComponent(m[1]);
+          if (m) { xsrfToken = decodeURIComponent(m[1]); cookiePairs.push(`XSRF-TOKEN=${m[1]}`); }
           const s = c.match(/pterodactyl_session=([^;]+)/);
-          if (s) sessionCookie = s[1];
+          if (s) { sessionCookie = s[1]; cookiePairs.push(`pterodactyl_session=${s[1]}`); }
         }
 
-        // Login
+        // Login with the CSRF cookie
         const loginResp = await fetch('https://deathlegionpanel.vercel.app/auth/login', {
           method: 'POST',
           headers: {
@@ -206,25 +213,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             'Accept': 'application/json',
             'X-XSRF-TOKEN': xsrfToken,
             'X-Requested-With': 'XMLHttpRequest',
-            'Cookie': `XSRF-TOKEN=${encodeURIComponent(xsrfToken)}; pterodactyl_session=${sessionCookie}`,
+            'Cookie': cookiePairs.join('; '),
+            'Origin': 'https://deathlegionpanel.vercel.app',
           },
           body: JSON.stringify({ user: panelUsername, password: panelPassword }),
+          redirect: 'manual',
         });
 
-        if (loginResp.ok) {
+        if (loginResp.ok || loginResp.status === 200) {
           const loginData = await loginResp.json();
           if (loginData?.data?.complete) {
             loginOk = true;
-            // Forward the session cookies to the browser
-            const respCookies = loginResp.headers.getSetCookie?.() || [];
-            for (const c of respCookies) {
-              const cookiePart = c.split(';')[0];
-              res.setHeader('Set-Cookie', c.split(';').slice(0).join(';'));
+            // Collect ALL set-cookie headers from login response
+            const loginCookies = loginResp.headers.getSetCookie?.() || [];
+            for (const c of loginCookies) {
+              allCookies.push(c);
             }
           }
         }
       } catch (e) {
         // Login failed — still show credentials so user can log in manually
+      }
+
+      // Set all cookies on the response so the browser has the session
+      if (allCookies.length > 0) {
+        res.setHeader('Set-Cookie', allCookies);
       }
 
       // Step 5: Show success (with auto-redirect if login succeeded)
@@ -275,20 +288,11 @@ function renderPage(res: VercelResponse, data: {
         <div class="step-status"><span class="dl-pill dl-pill-green">✓ Done</span></div>
       </div>
       <p style="color:var(--dl-text);font-size:1rem;margin-bottom:1rem;">Welcome, <strong>${data.username}</strong>! Your panel account is ready.</p>
-      ${data.autoLogin ? `
-        <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:var(--dl-radius);padding:1rem;margin-bottom:1rem;text-align:center;">
-          <p style="color:var(--dl-green);font-size:0.9rem;margin-bottom:0.5rem;">✓ You're logged in! Redirecting to your panel...</p>
-          <div class="dl-spinner" style="margin:0 auto;"></div>
-          <p style="color:var(--dl-text-dim);font-size:0.75rem;margin-top:0.5rem;">Auto-redirecting in 2 seconds</p>
-        </div>
-        <a href="/" class="go-link">Go to Panel Now →</a>
-        <script>setTimeout(function(){ window.location.href = '/'; }, 2000);</script>
-      ` : `
-        <div style="background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.2);border-radius:var(--dl-radius);padding:0.8rem;margin-bottom:1rem;text-align:center;">
-          <p style="color:var(--dl-yellow);font-size:0.82rem;">⚠️ Auto-login failed. Click below to log in manually.</p>
-        </div>
-        <a href="/" class="go-link">Click Here to Log In →</a>
-      `}
+      <div id="loginStatus" style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:var(--dl-radius);padding:1rem;margin-bottom:1rem;text-align:center;">
+        <p id="loginStatusText" style="color:var(--dl-green);font-size:0.9rem;margin-bottom:0.5rem;">✓ Logging you in...</p>
+        <div class="dl-spinner" style="margin:0 auto;"></div>
+      </div>
+      <a href="/" class="go-link" id="panelLink" style="display:none;">Go to Panel →</a>
       <details style="margin-top:1rem;">
         <summary style="color:var(--dl-text-dim);font-size:0.75rem;cursor:pointer;">Show account credentials</summary>
         <div class="signup-creds" style="margin-top:0.5rem;">
@@ -299,6 +303,52 @@ function renderPage(res: VercelResponse, data: {
           ${data.email ? `<div class="row"><span class="label">Email:</span> <span class="value">${data.email}</span></div>` : ''}
         </div>
       </details>
+      <script>
+      (async function() {
+        var username = ${JSON.stringify(data.username)};
+        var password = 'DeathLegion2025!';
+        var statusEl = document.getElementById('loginStatusText');
+        var linkEl = document.getElementById('panelLink');
+        try {
+          // Step 1: Get CSRF cookie
+          await fetch('/sanctum/csrf-cookie', { credentials: 'include' });
+          // Step 2: Get XSRF token from cookie
+          var xsrf = '';
+          document.cookie.split(';').forEach(function(c) {
+            var parts = c.trim().split('=');
+            if (parts[0] === 'XSRF-TOKEN') xsrf = decodeURIComponent(parts[1]);
+          });
+          // Step 3: Login
+          var loginResp = await fetch('/auth/login', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'X-XSRF-TOKEN': xsrf,
+              'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'include',
+            body: JSON.stringify({ user: username, password: password })
+          });
+          var loginData = await loginResp.json();
+          if (loginData && loginData.data && loginData.data.complete) {
+            statusEl.textContent = '✓ Logged in! Redirecting to your panel...';
+            statusEl.style.color = '#22c55e';
+            setTimeout(function() { window.location.href = '/'; }, 1000);
+          } else {
+            statusEl.textContent = '⚠️ Login failed. Click below to log in manually.';
+            statusEl.style.color = '#eab308';
+            linkEl.style.display = 'block';
+            linkEl.textContent = 'Click Here to Log In →';
+          }
+        } catch(e) {
+          statusEl.textContent = '⚠️ ' + e.message + '. Click below to log in.';
+          statusEl.style.color = '#eab308';
+          linkEl.style.display = 'block';
+          linkEl.textContent = 'Click Here to Log In →';
+        }
+      })();
+      </script>
     </div>
   ` : '';
 
