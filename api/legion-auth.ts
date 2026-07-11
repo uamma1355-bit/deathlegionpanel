@@ -25,7 +25,7 @@ import { DESIGN_SYSTEM_CSS } from './_design';
 const DL_OAUTH_BASE = 'https://deathlegion.vercel.app';
 const DL_CLIENT_ID = process.env.DL_CLIENT_ID || '31e2c359ab06df6bc57aa3f27bdeca33';
 const DL_CLIENT_SECRET = process.env.DL_CLIENT_SECRET || 'efc80e473be78922a74ac7786765212859d0048018bec73c7c2c755be1ba2ecd';
-const DL_REDIRECT_URI = 'https://deathlegionpanel.vercel.app/legion-auth';
+const DL_REDIRECT_URI = 'https://deathlegionpanel.vercel.app/oauth/callback';
 const DL_SCOPES = 'profile email';
 
 // === Panel config ===
