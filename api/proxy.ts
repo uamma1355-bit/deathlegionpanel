@@ -240,12 +240,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!bodyStr.includes('__LEGION_INJECT__')) {
           const legionInjection = `
 <style id="__LEGION_INJECT__">
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;500;600;700;800&display=swap');
 
-/* Background image on all panel pages */
+/* Background image on all panel pages — improved with radial gradients */
 body {
-  background-image: linear-gradient(rgba(8,8,8,0.85), rgba(8,8,8,0.9)), url('https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=1920&q=80') !important;
-  background-size: cover !important;
+  background-image:
+    radial-gradient(ellipse at top left, rgba(188,110,60,0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at bottom right, rgba(188,110,60,0.04) 0%, transparent 50%),
+    linear-gradient(rgba(8,8,8,0.86), rgba(8,8,8,0.92)),
+    url('https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=1920&q=80') !important;
+  background-size: cover, cover, cover, cover !important;
   background-position: center !important;
   background-attachment: fixed !important;
 }
@@ -283,50 +287,64 @@ body.dl-login-page input[type="email"]:focus {
   box-shadow: 0 0 0 3px rgba(188,110,60,0.15) !important;
 }
 
-/* BETA badge */
+/* BETA badge — improved with glow + animation */
 .dl-beta-badge {
   position: fixed; top: 12px; right: 12px; z-index: 99999;
   background: linear-gradient(135deg, #bc6e3c, #e89060);
-  color: #fff; padding: 4px 12px; border-radius: 20px;
-  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em;
+  color: #fff; padding: 4px 14px; border-radius: 20px;
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em;
   text-transform: uppercase; font-family: 'Inter', sans-serif;
-  box-shadow: 0 2px 10px rgba(188,110,60,0.3);
+  box-shadow: 0 2px 12px rgba(188,110,60,0.35), 0 0 20px rgba(188,110,60,0.15);
   pointer-events: none;
+  animation: dl-badge-glow 3s ease-in-out infinite;
+}
+@keyframes dl-badge-glow {
+  0%, 100% { box-shadow: 0 2px 12px rgba(188,110,60,0.35), 0 0 20px rgba(188,110,60,0.15); }
+  50% { box-shadow: 0 2px 12px rgba(188,110,60,0.45), 0 0 28px rgba(188,110,60,0.25); }
 }
 
-/* Death Legion branding watermark */
+/* Death Legion branding watermark — improved */
 .dl-brand {
   position: fixed; bottom: 12px; left: 12px; z-index: 99999;
-  font-family: 'Cinzel', serif; font-size: 0.75rem; font-weight: 700;
-  color: rgba(188,110,60,0.4); letter-spacing: 0.1em;
+  font-family: 'Cinzel', serif; font-size: 0.72rem; font-weight: 700;
+  color: rgba(188,110,60,0.35); letter-spacing: 0.12em;
   text-transform: uppercase; pointer-events: none;
+  text-shadow: 0 0 8px rgba(188,110,60,0.1);
 }
 
-/* Floating nav icons */
+/* Floating nav icons — improved with glassmorphism */
 .dl-nav-icons {
   position: fixed; top: 12px; left: 12px; z-index: 99999;
-  display: flex; gap: 6px; align-items: center;
+  display: flex; gap: 5px; align-items: center;
+  background: rgba(15,15,15,0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 4px;
+  border-radius: 14px;
+  border: 1px solid rgba(188,110,60,0.12);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }
 .dl-nav-icon {
   display: flex; align-items: center; justify-content: center;
-  width: 36px; height: 36px; border-radius: 10px;
-  background: rgba(20,20,20,0.9); border: 1px solid rgba(188,110,60,0.15);
+  width: 34px; height: 34px; border-radius: 10px;
+  background: transparent; border: 1px solid transparent;
   color: #888; font-size: 1rem; text-decoration: none;
-  transition: all 0.2s; cursor: pointer; position: relative;
+  transition: all 0.2s cubic-bezier(0.4,0,0.2,1); cursor: pointer; position: relative;
 }
 .dl-nav-icon:hover {
-  background: rgba(188,110,60,0.15); border-color: rgba(188,110,60,0.3);
-  color: #e89060; transform: translateY(-1px);
+  background: rgba(188,110,60,0.12); border-color: rgba(188,110,60,0.25);
+  color: #e89060; transform: translateY(-2px);
 }
-.dl-nav-icon svg { width: 18px; height: 18px; fill: currentColor; }
+.dl-nav-icon svg { width: 17px; height: 17px; fill: currentColor; }
 .dl-nav-icon .tooltip {
-  position: absolute; bottom: -28px; left: 50%; transform: translateX(-50%);
-  background: rgba(15,15,15,0.95); color: #e89060; padding: 2px 8px;
-  border-radius: 4px; font-size: 0.65rem; white-space: nowrap;
-  font-family: 'Inter', sans-serif; opacity: 0; transition: opacity 0.2s;
-  pointer-events: none;
+  position: absolute; bottom: -30px; left: 50%; transform: translateX(-50%);
+  background: rgba(15,15,15,0.95); color: #e89060; padding: 3px 10px;
+  border-radius: 6px; font-size: 0.65rem; white-space: nowrap;
+  font-family: 'Inter', sans-serif; font-weight: 600;
+  opacity: 0; transition: all 0.2s; pointer-events: none;
+  border: 1px solid rgba(188,110,60,0.2);
 }
-.dl-nav-icon:hover .tooltip { opacity: 1; }
+.dl-nav-icon:hover .tooltip { opacity: 1; bottom: -34px; }
 .dl-nav-icon.active { background: rgba(188,110,60,0.2); border-color: rgba(188,110,60,0.4); color: #e89060; }
 
 /* Legion Auth button on login page */
@@ -351,14 +369,20 @@ body.dl-login-page input[type="email"]:focus {
 }
 .dl-legion-divider span { padding: 0 0.75rem; }
 
-/* Credit badge in nav */
+/* Credit badge in nav — improved */
 .dl-credit-badge {
-  display: flex; align-items: center; gap: 4px;
-  background: rgba(20,20,20,0.9); border: 1px solid rgba(188,110,60,0.15);
-  border-radius: 10px; padding: 4px 10px; font-size: 0.75rem;
-  font-family: 'Inter', sans-serif; color: #e89060; font-weight: 600;
+  display: flex; align-items: center; gap: 5px;
+  background: rgba(188,110,60,0.1); border: 1px solid rgba(188,110,60,0.25);
+  border-radius: 10px; padding: 5px 12px; font-size: 0.72rem;
+  font-family: 'JetBrains Mono', 'Inter', monospace; color: #e89060; font-weight: 700;
+  transition: all 0.2s; margin-left: 2px;
 }
-.dl-credit-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; }
+.dl-credit-badge:hover {
+  background: rgba(188,110,60,0.2); border-color: rgba(188,110,60,0.4);
+  transform: translateY(-1px); box-shadow: 0 4px 12px rgba(188,110,60,0.2);
+}
+.dl-credit-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,0.5); animation: dl-dot-pulse 2s ease-in-out infinite; }
+@keyframes dl-dot-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
 
 /* Nav bar logo image */
 .dl-nav-logo {

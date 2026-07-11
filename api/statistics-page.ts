@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { sharedHeader } from './_design';
 
 const DAYTONA_TOKEN = 'dtn_c7bdd782306f6072855d802d3324bd7cd9c90597d29224bf30447bbef5385b22';
 const DAYTONA_API = 'https://app.daytona.io/api';
@@ -429,23 +430,16 @@ function renderHtml(
   </style>
 </head>
 <body>
+  ${sharedHeader('/statistics')}
   <div class="container">
-    <div class="header">
+    <div class="header" style="background:transparent;border:none;padding:0;margin-bottom:1rem;">
       <div class="header-left">
-        <div class="logo">Death Legion</div>
-        <div class="page-title">Live Statistics</div>
+        <div class="page-title" style="font-family:'Cinzel',serif;font-size:1.1rem;color:#e89060;letter-spacing:0.05em;">Live Statistics</div>
       </div>
       <div class="header-right">
         <div class="live-indicator"><div class="live-dot"></div>LIVE (refresh 10s)</div>
         <div class="last-update">${localTime} UTC</div>
       </div>
-    </div>
-
-    <div class="nav-links">
-      <a href="/" class="nav-link">Panel</a>
-      <a href="/statistics" class="nav-link active">Statistics</a>
-      <a href="/status" class="nav-link">Status</a>
-      <a href="/apply" class="nav-link">Apply</a>
     </div>
 
     <!-- Hero cards: CPU, RAM, Disk, Swap -->
