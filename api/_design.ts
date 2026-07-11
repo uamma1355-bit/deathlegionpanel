@@ -623,6 +623,7 @@ export function sharedHeader(activePage: string = ''): string {
     { href: '/ads', label: 'Watch Ads' },
     { href: '/ai-assistant', label: 'AI Chat' },
     { href: '/ai-agent', label: 'AI Agent' },
+    { href: '/oauth', label: 'OAuth' },
     { href: '/statistics', label: 'Stats' },
     { href: '/status', label: 'Status' },
   ];

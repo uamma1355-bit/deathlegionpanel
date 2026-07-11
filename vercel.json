@@ -42,6 +42,42 @@
       "destination": "/api/ads-page"
     },
     {
+      "source": "/oauth",
+      "destination": "/api/oauth-admin-page"
+    },
+    {
+      "source": "/oauth-admin",
+      "destination": "/api/oauth-admin-page"
+    },
+    {
+      "source": "/api/oauth-admin-page",
+      "destination": "/api/oauth-admin-page"
+    },
+    {
+      "source": "/api/oauth/authorize",
+      "destination": "/api/oauth/authorize"
+    },
+    {
+      "source": "/api/oauth/token",
+      "destination": "/api/oauth/token"
+    },
+    {
+      "source": "/api/oauth/userinfo",
+      "destination": "/api/oauth/userinfo"
+    },
+    {
+      "source": "/api/oauth/introspect",
+      "destination": "/api/oauth/introspect"
+    },
+    {
+      "source": "/api/oauth/revoke",
+      "destination": "/api/oauth/revoke"
+    },
+    {
+      "source": "/api/oauth/apps",
+      "destination": "/api/oauth/apps"
+    },
+    {
       "source": "/api/credits-page",
       "destination": "/api/credits-page"
     },
