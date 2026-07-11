@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { DESIGN_SYSTEM_CSS, sharedHeader } from '../_design';
+import { DESIGN_SYSTEM_CSS, sharedHeader } from './_design';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
