@@ -46,12 +46,20 @@
       "destination": "/api/oauth-admin-page"
     },
     {
+      "source": "/oauth/callback",
+      "destination": "/api/oauth-callback-page"
+    },
+    {
       "source": "/oauth-admin",
       "destination": "/api/oauth-admin-page"
     },
     {
       "source": "/api/oauth-admin-page",
       "destination": "/api/oauth-admin-page"
+    },
+    {
+      "source": "/api/oauth-callback-page",
+      "destination": "/api/oauth-callback-page"
     },
     {
       "source": "/api/oauth/authorize",
