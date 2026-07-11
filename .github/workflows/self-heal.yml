@@ -27,13 +27,17 @@ jobs:
       - name: Install E2B SDK
         run: npm install e2b
 
-      - name: Run cluster manager + self-heal
+      - name: Run permanent fix + cluster self-heal
         env:
           DAYTONA_TOKEN: ${{ secrets.DAYTONA_TOKEN }}
           E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
         run: |
-          python3 scripts/cluster_manager.py 2>&1 | tee selfheal.log
+          # Run permanent fix (fixes start_all.sh, rc.local, watchers, E2B storage)
+          python3 scripts/permanent_fix_v2.py 2>&1 | tee selfheal.log
+          echo "---" >> selfheal.log
+          # Also run cluster manager for multi-node healing
+          python3 scripts/cluster_manager.py 2>&1 | tee -a selfheal.log || true
           echo "## Cluster Self-Heal Report" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          tail -30 selfheal.log >> "$GITHUB_STEP_SUMMARY"
+          tail -40 selfheal.log >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
