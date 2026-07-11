@@ -144,8 +144,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             '</div>' +
           '</div>' +
           '<div class="app-credentials">' +
-            '<div class="credential-row"><span class="credential-label">Client ID</span><span class="credential-value">' + app.client_id + '</span><button class="copy-btn" onclick="copyText(\\'' + app.client_id + '\\', this)">Copy</button></div>' +
-            '<div class="credential-row"><span class="credential-label">Client Secret</span><span class="credential-value" id="secret-' + app.id + '">••••••••••••••••••••</span><button class="copy-btn" onclick="revealSecret(' + app.id + ', this)">Reveal</button></div>' +
+            '<div class="credential-row"><span class="credential-label">Client ID</span><span class="credential-value">' + app.client_id + '</span><button class="copy-btn" data-copy="' + app.client_id + '">Copy</button></div>' +
+            '<div class="credential-row"><span class="credential-label">Client Secret</span><span class="credential-value" id="secret-' + app.id + '">••••••••••••••••••••</span><button class="copy-btn" data-reveal="' + app.id + '">Reveal</button></div>' +
           '</div>' +
           '<div class="redirect-uris">' +
             '<div class="redirect-uris-label">Redirect URIs</div>' +
@@ -153,6 +153,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           '</div>' +
         '</div>';
       }).join('');
+      // Attach event listeners for copy/reveal buttons
+      document.querySelectorAll('[data-copy]').forEach(function(btn) {
+        btn.onclick = function() { copyText(btn.getAttribute('data-copy'), btn); };
+      });
+      document.querySelectorAll('[data-reveal]').forEach(function(btn) {
+        btn.onclick = function() { revealSecret(parseInt(btn.getAttribute('data-reveal')), btn); };
+      });
     }
 
     function escapeHtml(s) {
@@ -199,7 +206,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       document.getElementById('appName').value = app.name;
       document.getElementById('appDesc').value = app.description || '';
       document.getElementById('appHome').value = app.homepage_url || '';
-      document.getElementById('appRedirects').value = app.redirect_uris.join('\\n');
+      document.getElementById('appRedirects').value = app.redirect_uris.join('\\\n');
       document.getElementById('appModal').classList.add('active');
     }
 
@@ -212,7 +219,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const name = document.getElementById('appName').value.trim();
       const description = document.getElementById('appDesc').value.trim();
       const homepageUrl = document.getElementById('appHome').value.trim();
-      const redirectUris = document.getElementById('appRedirects').value.split('\\n').map(s => s.trim()).filter(Boolean);
+      const redirectUris = document.getElementById('appRedirects').value.split('\\\n').map(s => s.trim()).filter(Boolean);
 
       if (!name) { alert('App name required'); return; }
       if (redirectUris.length === 0) { alert('At least one redirect URI required'); return; }
