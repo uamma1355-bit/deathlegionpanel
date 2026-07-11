@@ -21,8 +21,9 @@ let tablesInitialized = false;
 
 /** Execute a MySQL query on the panel sandbox */
 async function mysqlQuery(sql: string, timeout = 15): Promise<string> {
-  const escapedSql = sql.replace(/'/g, "'\\''");
-  const cmd = `mysql -u ${DB_USER} -p${DB_PASS} ${DB_NAME} -e '${escapedSql}' 2>/dev/null`;
+  // Escape for double-quoted shell string
+  const escapedSql = sql.replace(/\\\\/g, '\\\\\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$');
+  const cmd = `mysql -u ${DB_USER} -p${DB_PASS} ${DB_NAME} -e "${escapedSql}" 2>/dev/null`;
   const body = JSON.stringify({ command: cmd, cwd: '/home/daytona', timeout });
   const resp = await fetch(`${DAYTONA_API}/toolbox/${SANDBOX_ID}/toolbox/process/execute`, {
     method: 'POST',
@@ -33,15 +34,13 @@ async function mysqlQuery(sql: string, timeout = 15): Promise<string> {
   return data.result || '';
 }
 
-/** Execute a MySQL query that returns JSON (using mysql's -e with JSON formatting) */
+/** Execute a MySQL query that returns rows as array of objects */
 async function mysqlQueryJson(sql: string, timeout = 15): Promise<any[]> {
-  // Use mysql to output JSON
-  const escapedSql = sql.replace(/'/g, "'\\''");
-  const cmd = `mysql -u ${DB_USER} -p${DB_PASS} ${DB_NAME} --table -e '${escapedSql}' 2>/dev/null`;
-  // Actually, let's use a simpler approach - parse the tab-separated output
-  const rawSql = sql.replace(/'/g, "'\\''");
-  const jsonCmd = `mysql -u ${DB_USER} -p${DB_PASS} ${DB_NAME} -e "${rawSql}" --batch --raw 2>/dev/null`;
-  const body = JSON.stringify({ command: jsonCmd, cwd: '/home/daytona', timeout });
+  // Use --batch --raw for tab-separated output, wrap SQL in double quotes
+  // Inside double quotes, single quotes are safe — only need to escape " and \ and $
+  const escapedSql = sql.replace(/\\\\/g, '\\\\\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$');
+  const cmd = `mysql -u ${DB_USER} -p${DB_PASS} ${DB_NAME} -e "${escapedSql}" --batch --raw 2>/dev/null`;
+  const body = JSON.stringify({ command: cmd, cwd: '/home/daytona', timeout });
   const resp = await fetch(`${DAYTONA_API}/toolbox/${SANDBOX_ID}/toolbox/process/execute`, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${DAYTONA_TOKEN}`, 'Content-Type': 'application/json' },
