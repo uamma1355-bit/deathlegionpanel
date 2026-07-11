@@ -181,13 +181,60 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return renderPage(res, { error: result.error || 'Failed to create panel account' });
       }
 
-      // Step 4: Show success
+      // Step 4: Auto-login the user (set session cookies via the panel's login API)
+      const panelUsername = result.username;
+      const panelPassword = 'DeathLegion2025!';
+      let loginOk = false;
+      try {
+        // Get CSRF cookie
+        const csrfResp = await fetch('https://deathlegionpanel.vercel.app/sanctum/csrf-cookie');
+        const setCookies = csrfResp.headers.getSetCookie?.() || [];
+        let xsrfToken = '';
+        let sessionCookie = '';
+        for (const c of setCookies) {
+          const m = c.match(/XSRF-TOKEN=([^;]+)/);
+          if (m) xsrfToken = decodeURIComponent(m[1]);
+          const s = c.match(/pterodactyl_session=([^;]+)/);
+          if (s) sessionCookie = s[1];
+        }
+
+        // Login
+        const loginResp = await fetch('https://deathlegionpanel.vercel.app/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-XSRF-TOKEN': xsrfToken,
+            'X-Requested-With': 'XMLHttpRequest',
+            'Cookie': `XSRF-TOKEN=${encodeURIComponent(xsrfToken)}; pterodactyl_session=${sessionCookie}`,
+          },
+          body: JSON.stringify({ user: panelUsername, password: panelPassword }),
+        });
+
+        if (loginResp.ok) {
+          const loginData = await loginResp.json();
+          if (loginData?.data?.complete) {
+            loginOk = true;
+            // Forward the session cookies to the browser
+            const respCookies = loginResp.headers.getSetCookie?.() || [];
+            for (const c of respCookies) {
+              const cookiePart = c.split(';')[0];
+              res.setHeader('Set-Cookie', c.split(';').slice(0).join(';'));
+            }
+          }
+        }
+      } catch (e) {
+        // Login failed — still show credentials so user can log in manually
+      }
+
+      // Step 5: Show success (with auto-redirect if login succeeded)
       return renderPage(res, {
         success: true,
         username: result.username,
         memberNumber: userInfo.memberNumber,
         email: userInfo.email,
         tokens,
+        autoLogin: loginOk,
       });
 
     } catch (e: any) {
@@ -207,6 +254,7 @@ function renderPage(res: VercelResponse, data: {
   email?: string;
   tokens?: any;
   manual?: boolean;
+  autoLogin?: boolean;
 }) {
   const errorHtml = data.error ? `
     <div class="step-card" style="border-color:rgba(239,68,68,0.3);">
@@ -227,14 +275,30 @@ function renderPage(res: VercelResponse, data: {
         <div class="step-status"><span class="dl-pill dl-pill-green">✓ Done</span></div>
       </div>
       <p style="color:var(--dl-text);font-size:1rem;margin-bottom:1rem;">Welcome, <strong>${data.username}</strong>! Your panel account is ready.</p>
-      <div class="signup-creds">
-        <div class="row"><span class="label">Panel URL:</span> <span class="value">https://deathlegionpanel.vercel.app</span></div>
-        <div class="row"><span class="label">Username:</span> <span class="value">${data.username}</span></div>
-        <div class="row"><span class="label">Password:</span> <span class="value">DeathLegion2025!</span></div>
-        ${data.memberNumber ? `<div class="row"><span class="label">DL Member #:</span> <span class="value">${data.memberNumber}</span></div>` : ''}
-        ${data.email ? `<div class="row"><span class="label">Email:</span> <span class="value">${data.email}</span></div>` : ''}
-        <a href="/" class="go-link">Go to Panel →</a>
-      </div>
+      ${data.autoLogin ? `
+        <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:var(--dl-radius);padding:1rem;margin-bottom:1rem;text-align:center;">
+          <p style="color:var(--dl-green);font-size:0.9rem;margin-bottom:0.5rem;">✓ You're logged in! Redirecting to your panel...</p>
+          <div class="dl-spinner" style="margin:0 auto;"></div>
+          <p style="color:var(--dl-text-dim);font-size:0.75rem;margin-top:0.5rem;">Auto-redirecting in 2 seconds</p>
+        </div>
+        <a href="/" class="go-link">Go to Panel Now →</a>
+        <script>setTimeout(function(){ window.location.href = '/'; }, 2000);</script>
+      ` : `
+        <div style="background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.2);border-radius:var(--dl-radius);padding:0.8rem;margin-bottom:1rem;text-align:center;">
+          <p style="color:var(--dl-yellow);font-size:0.82rem;">⚠️ Auto-login failed. Click below to log in manually.</p>
+        </div>
+        <a href="/" class="go-link">Click Here to Log In →</a>
+      `}
+      <details style="margin-top:1rem;">
+        <summary style="color:var(--dl-text-dim);font-size:0.75rem;cursor:pointer;">Show account credentials</summary>
+        <div class="signup-creds" style="margin-top:0.5rem;">
+          <div class="row"><span class="label">Panel URL:</span> <span class="value">https://deathlegionpanel.vercel.app</span></div>
+          <div class="row"><span class="label">Username:</span> <span class="value">${data.username}</span></div>
+          <div class="row"><span class="label">Password:</span> <span class="value">DeathLegion2025!</span></div>
+          ${data.memberNumber ? `<div class="row"><span class="label">DL Member #:</span> <span class="value">${data.memberNumber}</span></div>` : ''}
+          ${data.email ? `<div class="row"><span class="label">Email:</span> <span class="value">${data.email}</span></div>` : ''}
+        </div>
+      </details>
     </div>
   ` : '';
 
