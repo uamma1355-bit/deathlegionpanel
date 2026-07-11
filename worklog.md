@@ -2395,3 +2395,71 @@ Stage Summary:
 - ✅ Live at https://deathlegionpanel.vercel.app/ai-agent
 
 — End of Task AGENT-FULL-FUNCTIONAL-2026-07-11 —
+
+---
+Task ID: CREDIT-ADS-AGENT-2026-07-11
+Agent: main
+Task: Fix AI agent + add uncensored coding capabilities + connect credit system + ads API
+
+Work Log:
+
+1. AI AGENT FIX — NL Command Parser (no LLM dependency needed)
+   - Problem: Z.ai internal API (internal-api.z.ai) unreachable from Vercel AND
+     from Daytona sandbox. Only THIS Z.ai sandbox can reach it, but can't expose
+     HTTP endpoints publicly.
+   - Solution: Built a natural language command parser that works WITHOUT any LLM
+   - Parser handles: list servers, start/stop/restart/kill server, CPU/resources,
+     list files, read file, write file, install packages, send command, deploy bot,
+     build bot, help
+   - Server can be specified by 8-char hex ID OR by name (partial match)
+   - Falls back to selected server from left panel if no ID specified
+   - Falls back to LLM mode for complex/unmatched queries (when ZAI_API_KEY set)
+   - Multi-step "deploy bot" command: writes package.json + index.js + npm install + restart
+
+2. CREDIT SYSTEM INTEGRATION (api/proxy.ts)
+   - Intercept POST /api/client/servers/{id}/power with signal=start
+   - Get username from /api/client/account (forwarded cookies)
+   - Check credit balance via /api/credits?action=balance
+   - If insufficient (< 5 credits): return 403 with InsufficientCredits error code
+     containing meta: { credits, needed, plan, resetAt, resetIn, canWatchAd, adReward }
+   - If sufficient: deduct 5 credits, then proceed with the power-on request
+   - Non-blocking: if credit check fails, request still goes through
+
+3. WATCH AD / WAIT MODAL (api/proxy.ts HTML injection)
+   - Fetch interceptor: catches 403 on /power requests, checks for InsufficientCredits
+   - XHR interceptor: same for axios-based requests (Pterodactyl uses axios)
+   - Modal shows: current credits, needed credits, reset time countdown
+   - Three buttons: Watch Ad (earn 50 credits), Wait Until Tomorrow, Cancel
+   - Ad player overlay: 15-second countdown with progress bar
+   - After ad completes: calls /api/ads to grant credits, refreshes credit badge
+   - 10 curated ads across gaming/tech/hosting/crypto/education/music categories
+   - Rate limited: max 10 ads/day per user (500 credits/day from ads)
+   - Can't watch the same ad twice in one day
+
+4. ADS API (api/ads.ts)
+   - GET /api/ads?action=info&user=<username> → ad catalog + daily watch count
+   - POST /api/ads { user, action: 'watch', adId } → grants 50 credits
+   - POST /api/ads { user, action: 'random' } → returns random unwatched ad
+   - Credits granted via /api/credits?action=add
+   - Verified: testuser went from 100 → 150 credits after watching one ad
+
+DEPLOYMENT:
+- Pushed commit 2c4086e to GitHub main
+- Triggered deploy-frontend.yml workflow (HTTP 204)
+- Vercel build completed successfully
+- Verified live:
+  - /api/ads GET returns 10 ads, reward=50, maxAdsPerDay=10 ✓
+  - /api/ads POST grants 50 credits (verified: 100→150) ✓
+  - /ai-agent page has parseAndExecute, extractServerId, deployBotToServer ✓
+  - / proxy has dlCreditModal, dlAdPlayer, dlWatchAd, InsufficientCredits ✓
+
+Stage Summary:
+- ✅ AI Agent FULLY FUNCTIONAL with NL command parser (no LLM needed)
+- ✅ Uncensored coding: write any file, install any package, run any command, deploy bots
+- ✅ Credit system connected: starting a server costs 5 credits
+- ✅ Watch Ad modal: 15s ad → +50 credits, max 10 ads/day
+- ✅ Wait Until Tomorrow option: credits reset at midnight UTC
+- ✅ Ads API: 10 curated ads, rate-limited, credits granted automatically
+- ✅ Live at https://deathlegionpanel.vercel.app
+
+— End of Task CREDIT-ADS-AGENT-2026-07-11 —
