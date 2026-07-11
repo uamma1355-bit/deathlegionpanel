@@ -26,34 +26,42 @@ function sqlEscape(s: string): string {
 
 /** Execute a MySQL query on the panel sandbox */
 async function mysqlQuery(sql: string, timeout = 15): Promise<string> {
-  // Escape for double-quoted shell string
-  const escapedSql = sql.replace(/\\\\/g, '\\\\\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$');
-  const cmd = `mysql -u ${DB_USER} -p${DB_PASS} ${DB_NAME} -e "${escapedSql}" 2>/dev/null`;
+  // Collapse to single line, escape for double-quoted shell string
+  const singleLine = sql.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+  const escapedSql = singleLine.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$');
+  const cmd = `mysql -u ${DB_USER} -p${DB_PASS} ${DB_NAME} -e "${escapedSql}" 2>&1`;
   const body = JSON.stringify({ command: cmd, cwd: '/home/daytona', timeout });
-  const resp = await fetch(`${DAYTONA_API}/toolbox/${SANDBOX_ID}/toolbox/process/execute`, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${DAYTONA_TOKEN}`, 'Content-Type': 'application/json' },
-    body,
-  });
-  const data = await resp.json() as any;
-  return data.result || '';
+  try {
+    const resp = await fetch(`${DAYTONA_API}/toolbox/${SANDBOX_ID}/toolbox/process/execute`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${DAYTONA_TOKEN}`, 'Content-Type': 'application/json' },
+      body,
+    });
+    const data = await resp.json() as any;
+    return data.result || '';
+  } catch (e: any) {
+    throw new Error(`MySQL query failed: ${e?.message || e}`);
+  }
 }
 
 /** Execute a MySQL query that returns rows as array of objects */
 async function mysqlQueryJson(sql: string, timeout = 15): Promise<any[]> {
-  // Use --batch --raw for tab-separated output, wrap SQL in double quotes
-  // Inside double quotes, single quotes are safe — only need to escape " and \ and $
-  const escapedSql = sql.replace(/\\\\/g, '\\\\\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$');
-  const cmd = `mysql -u ${DB_USER} -p${DB_PASS} ${DB_NAME} -e "${escapedSql}" --batch --raw 2>/dev/null`;
+  const singleLine = sql.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+  const escapedSql = singleLine.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$');
+  const cmd = `mysql -u ${DB_USER} -p${DB_PASS} ${DB_NAME} -e "${escapedSql}" --batch --raw 2>&1`;
   const body = JSON.stringify({ command: cmd, cwd: '/home/daytona', timeout });
-  const resp = await fetch(`${DAYTONA_API}/toolbox/${SANDBOX_ID}/toolbox/process/execute`, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${DAYTONA_TOKEN}`, 'Content-Type': 'application/json' },
-    body,
-  });
-  const data = await resp.json() as any;
-  const result = data.result || '';
-  return parseMysqlBatch(result);
+  try {
+    const resp = await fetch(`${DAYTONA_API}/toolbox/${SANDBOX_ID}/toolbox/process/execute`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${DAYTONA_TOKEN}`, 'Content-Type': 'application/json' },
+      body,
+    });
+    const data = await resp.json() as any;
+    const result = data.result || '';
+    return parseMysqlBatch(result);
+  } catch (e: any) {
+    throw new Error(`MySQL query failed: ${e?.message || e}`);
+  }
 }
 
 /** Parse MySQL --batch --raw output into array of objects */
