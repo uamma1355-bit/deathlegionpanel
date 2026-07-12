@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { DESIGN_SYSTEM_CSS, sharedHeader } from '../_design';
+import { DESIGN_SYSTEM_CSS, sharedHeader } from './_design';
 
 const DAYTONA_TOKEN = process.env.DAYTONA_TOKEN || 'dtn_c7bdd782306f6072855d802d3324bd7cd9c90597d29224bf30447bbef5385b22';
 const SANDBOX_ID = '16551277-c744-47d8-bbf4-f681442b1691';
