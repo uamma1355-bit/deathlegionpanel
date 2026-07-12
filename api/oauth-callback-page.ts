@@ -74,15 +74,15 @@ if (!$user) {
     ]);
 }
 $existingServers = Server::where('owner_id', $user->id)->count();
-if ($existingServers < 2) {
+if ($existingServers < 3) {
     $egg = Egg::find(1);
     $location = Location::first();
     $creationService = app(ServerCreationService::class);
     $nodes = Node::orderBy('id')->get();
-    for ($i = $existingServers + 1; $i <= 2; $i++) {
+    for ($i = $existingServers + 1; $i <= 3; $i++) {
         // RE-CHECK server count inside the loop to prevent duplicates
         $currentCount = Server::where('owner_id', $user->id)->count();
-        if ($currentCount >= 2) break;
+        if ($currentCount >= 3) break;
         $bestNode = null; $minCount = 999;
         foreach ($nodes as $n) { $cnt = Server::where('node_id', $n->id)->count(); if ($cnt < $minCount) { $minCount = $cnt; $bestNode = $n; } }
         if (!$bestNode) break;

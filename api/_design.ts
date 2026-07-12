@@ -626,6 +626,7 @@ export function sharedHeader(activePage: string = ''): string {
     { href: '/oauth', label: 'OAuth' },
     { href: '/statistics', label: 'Stats' },
     { href: '/status', label: 'Status' },
+    { href: '/admin', label: 'Admin' },
   ];
   const navLinks = pages.map(p =>
     `<a href="${p.href}"${p.href === activePage ? ' class="active"' : ''}>${p.label}</a>`

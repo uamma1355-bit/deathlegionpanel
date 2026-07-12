@@ -62,6 +62,30 @@
       "destination": "/api/oauth-callback-page"
     },
     {
+      "source": "/admin",
+      "destination": "/api/admin-page"
+    },
+    {
+      "source": "/admin/users",
+      "destination": "/api/admin-users-page"
+    },
+    {
+      "source": "/admin/servers",
+      "destination": "/api/admin-servers-page"
+    },
+    {
+      "source": "/api/admin-page",
+      "destination": "/api/admin-page"
+    },
+    {
+      "source": "/api/admin-users-page",
+      "destination": "/api/admin-users-page"
+    },
+    {
+      "source": "/api/admin-servers-page",
+      "destination": "/api/admin-servers-page"
+    },
+    {
       "source": "/api/oauth/authorize",
       "destination": "/api/oauth/authorize"
     },

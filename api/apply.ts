@@ -75,7 +75,7 @@ $user = $userService->handle([
 echo "USER_CREATED:" . $user->id . "\\n";
 
 // Get allocations
-$allocs = Allocation::whereNull('server_id')->orderBy('port')->limit(2)->get();
+$allocs = Allocation::whereNull('server_id')->orderBy('port')->limit(3)->get();
 echo "ALLOCATIONS:" . $allocs->count() . "\\n";
 
 $egg = Egg::find(1);
@@ -83,7 +83,7 @@ $node = Node::first();
 $location = Location::first();
 $creationService = app(ServerCreationService::class);
 
-$serverNames = [$input['username'] . ' Bot 1', $input['username'] . ' Bot 2'];
+$serverNames = [$input['username'] . ' Bot 1', $input['username'] . ' Bot 2', $input['username'] . ' Bot 3'];
 $servers = [];
 
 foreach ($serverNames as $i => $name) {
@@ -121,9 +121,18 @@ foreach ($serverNames as $i => $name) {
         // Install placeholder index.js
         $volPath = '/var/lib/pterodactyl/volumes/' . $server->uuid;
         @mkdir($volPath, 0755, true);
-        file_put_contents($volPath . '/index.js', "console.log('Upload your bot files via Files tab');\\n");
-        chown($volPath . '/index.js', 'pterodactyl');
-        chgrp($volPath . '/index.js', 'pterodactyl');
+        if (file_exists('/opt/deathlegion/bot_template.js')) {
+            @copy('/opt/deathlegion/bot_template.js', $volPath . '/index.js');
+        } else {
+            file_put_contents($volPath . '/index.js', "console.log('Death Legion bot ready');\\n");
+        }
+        if (file_exists('/opt/deathlegion/bot_package.json')) {
+            @copy('/opt/deathlegion/bot_package.json', $volPath . '/package.json');
+        }
+        @chown($volPath . '/index.js', 'pterodactyl');
+        @chgrp($volPath . '/index.js', 'pterodactyl');
+        @chown($volPath . '/package.json', 'pterodactyl');
+        @chgrp($volPath . '/package.json', 'pterodactyl');
 
         echo "SERVER_CREATED:" . $server->id . ":" . $server->uuid . ":" . $server->name . "\\n";
         $servers[] = $server->uuid;
