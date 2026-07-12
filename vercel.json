@@ -67,23 +67,71 @@
     },
     {
       "source": "/admin/users",
-      "destination": "/api/admin-users-page"
+      "destination": "/api/admin/users-page"
     },
     {
       "source": "/admin/servers",
-      "destination": "/api/admin-servers-page"
+      "destination": "/api/admin/servers-page"
+    },
+    {
+      "source": "/admin/nodes",
+      "destination": "/api/admin/nodes-page"
+    },
+    {
+      "source": "/admin/allocations",
+      "destination": "/api/admin/allocations-page"
+    },
+    {
+      "source": "/admin/eggs",
+      "destination": "/api/admin/eggs-page"
+    },
+    {
+      "source": "/admin/locations",
+      "destination": "/api/admin/locations-page"
+    },
+    {
+      "source": "/admin/databases",
+      "destination": "/api/admin/databases-page"
+    },
+    {
+      "source": "/admin/settings",
+      "destination": "/api/admin/settings-page"
+    },
+    {
+      "source": "/admin/activity",
+      "destination": "/api/admin/activity-page"
+    },
+    {
+      "source": "/admin/api-keys",
+      "destination": "/api/admin/api-keys-page"
+    },
+    {
+      "source": "/admin/announcements",
+      "destination": "/api/admin/announcements-page"
+    },
+    {
+      "source": "/admin/ip-bans",
+      "destination": "/api/admin/ip-bans-page"
+    },
+    {
+      "source": "/admin/applications",
+      "destination": "/api/admin/applications-page"
+    },
+    {
+      "source": "/admin/credits",
+      "destination": "/api/admin/credits-page"
+    },
+    {
+      "source": "/admin/security",
+      "destination": "/api/admin/security-page"
+    },
+    {
+      "source": "/api/admin-api",
+      "destination": "/api/admin-api"
     },
     {
       "source": "/api/admin-page",
       "destination": "/api/admin-page"
-    },
-    {
-      "source": "/api/admin-users-page",
-      "destination": "/api/admin-users-page"
-    },
-    {
-      "source": "/api/admin-servers-page",
-      "destination": "/api/admin-servers-page"
     },
     {
       "source": "/api/oauth/authorize",
